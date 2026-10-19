@@ -1,0 +1,58 @@
+# AI Lakehouse — run `make up && make all`
+SHELL := /bin/bash
+PY := .venv/bin/python
+UV := $(shell command -v uv 2>/dev/null)
+
+# Query used by `make query` (override: make query Q="package arrived broken")
+Q ?= package arrived damaged and the seller never answered
+SINCE ?= 2018-01-01
+STATUS ?= delivered
+NPROBE ?= 3
+
+.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect bonus test all clean
+
+help:
+	@grep -E '^[a-z-]+:' Makefile | grep -v '^\.PHONY' | cut -d: -f1 | tr '\n' ' '; echo
+
+setup:  ## venv + pinned deps + .env
+	@test -f .env || cp .env.example .env
+	@test -d .venv || python3.11 -m venv .venv
+ifdef UV
+	$(UV) pip install --python $(PY) -r requirements.txt
+else
+	$(PY) -m pip install -r requirements.txt
+endif
+
+up:  ## MinIO + bucket + Iceberg REST catalog
+	docker compose up -d
+	scripts/wait_for_services.sh
+	$(PY) src/01_check_connection.py
+
+down:
+	docker compose --profile bonus down
+
+data:  ## Olist via kaggle if possible, else synthetic
+	scripts/download_data.sh
+
+bronze: ; $(PY) src/02_bronze_ingest.py
+drift: ; $(PY) src/03_schema_drift.py
+embed-bench: ; $(PY) src/04_embed_naive_vs_batched.py
+silver: ; $(PY) src/05_silver_embeddings.py
+index: ; $(PY) src/06_build_ivf_index.py
+gold: ; $(PY) src/07_gold_write.py
+query: ; $(PY) src/08_hybrid_query.py --query "$(Q)" --since $(SINCE) --status $(STATUS) --nprobe $(NPROBE) --mode ivf
+bench: ; $(PY) src/09_benchmark.py
+inspect: ; $(PY) src/10_inspect_iceberg_metadata.py
+
+bonus:  ## optional: Qdrant comparison
+	docker compose --profile bonus up -d qdrant
+	$(PY) src/bonus_qdrant_compare.py
+
+test: ; $(PY) -m pytest -v tests
+
+# Core flow. (bronze already ingests; drift appends a second batch afterwards.)
+all: data bronze drift embed-bench silver index gold query bench inspect
+
+clean:  ## remove local state (keeps .venv and .ivy2 jar cache)
+	docker compose --profile bonus down -v
+	rm -rf spark-warehouse metastore_db derby.log benchmarks/*.json benchmarks/*.md data/*.csv
