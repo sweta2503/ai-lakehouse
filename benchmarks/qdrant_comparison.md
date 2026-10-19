@@ -6,13 +6,13 @@ Ground truth: exact brute force over the Iceberg gold table. Iceberg rows are co
 
 | System | mean ms | p95 ms | recall@10 (by id) | recall@10 (tie-aware) |
 |---|---:|---:|---:|---:|
-| Qdrant HNSW (default) | 2.56 | 3.53 | 0.784 | 1.000 |
-| Qdrant exact | 2.29 | 2.77 | 0.784 | 1.000 |
-| Iceberg brute force (Spark) | 335.3 | 482.6 | 1.000 | 1.000 |
-| Iceberg IVF nprobe=1 (Spark) | 215.5 | 273.8 | 0.786 | 0.808 |
-| Iceberg IVF nprobe=3 (Spark) | 252.3 | 328.5 | 0.936 | 0.966 |
-| Iceberg IVF nprobe=5 (Spark) | 284.2 | 374.4 | 0.948 | 0.970 |
-| Iceberg IVF nprobe=10 (Spark) | 349.9 | 483.4 | 0.986 | 0.996 |
+| Qdrant HNSW (default) | 2.63 | 4.69 | 0.782 | 1.000 |
+| Qdrant exact | 2.34 | 3.39 | 0.782 | 1.000 |
+| Iceberg brute force (Spark) | 349.7 | 514.3 | 1.000 | 1.000 |
+| Iceberg IVF nprobe=1 (Spark) | 237.1 | 286.5 | 0.786 | 0.808 |
+| Iceberg IVF nprobe=3 (Spark) | 264.6 | 341.1 | 0.936 | 0.966 |
+| Iceberg IVF nprobe=5 (Spark) | 304.1 | 409.6 | 0.948 | 0.970 |
+| Iceberg IVF nprobe=10 (Spark) | 362.9 | 519.7 | 0.986 | 0.996 |
 
 Notes
 - Qdrant latency is a client-side HTTP round trip to a purpose-built engine; the Iceberg numbers include a full
