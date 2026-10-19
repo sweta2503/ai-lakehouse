@@ -1,0 +1,19 @@
+{
+  "model": "paraphrase-multilingual-MiniLM-L12-v2",
+  "rows": 20000,
+  "batch_size": 64,
+  "spark_cores": 10,
+  "torch_threads_per_worker": 1,
+  "naive_seconds": 47.29,
+  "naive_rows_per_sec": 423.0,
+  "batched_seconds": 22.14,
+  "batched_rows_per_sec": 903.5,
+  "speedup_batched_vs_naive": 2.14,
+  "antipattern_rows": 100,
+  "antipattern_seconds": 43.65,
+  "antipattern_rows_per_sec": 2.29,
+  "speedup_batched_vs_antipattern": 394.4,
+  "warmup_seconds_first_includes_model_load": 9.9,
+  "warmup_seconds_second_model_already_cached": 0.9,
+  "min_cosine_naive_vs_batched": 1.0
+}

@@ -4,6 +4,7 @@ Reports mean / p95 latency, Iceberg data files scanned, rows read from the scan,
 brute-force ground truth (same filters, exact scoring). Writes benchmarks/ivf_benchmark.{json,md}.
 """
 import json
+import os
 import statistics
 import sys
 
@@ -60,19 +61,29 @@ def main() -> int:
     log.info("%d queries | gold: %d rows, %d data files, k=%d clusters", len(queries), total_rows, total_files, len(C))
     Q = encode_texts([t for t, _ in queries])
 
-    def run_config(mode, nprobe=None):
-        res = []
-        for (t, f), q in zip(queries, Q):
-            res.append(search(spark, q, mode=mode, C=C, nprobe=nprobe or 0, top_k=TOP_K, **f))
-        return res
+    repeats = int(os.environ.get("BENCH_REPEATS", 3))
+    configs = [("brute", None)] + [("ivf", n) for n in NPROBES]
 
     # warm up (JIT, REST metadata, codegen) on a few queries in both modes
     for (t, f), q in list(zip(queries, Q))[:4]:
         search(spark, q, mode="brute", top_k=TOP_K, **f)
         search(spark, q, mode="ivf", C=C, nprobe=3, top_k=TOP_K, **f)
 
-    log.info("brute force (ground truth)...")
-    truth = run_config("brute")
+    # Interleave: for each query, run every config back to back (repeated `repeats` times, median latency).
+    # This keeps slow drift (thermal state, caches) from favouring whichever config happens to run last.
+    log.info("running %d queries x %d configs x %d repeats (interleaved)...", len(queries), len(configs), repeats)
+    runs = {c: [None] * len(queries) for c in configs}
+    lat_samples = {c: [[] for _ in queries] for c in configs}
+    for rep in range(repeats):
+        for i, ((t, f), q) in enumerate(zip(queries, Q)):
+            for c in configs:
+                r = search(spark, q, mode=c[0], C=C, nprobe=c[1] or 0, top_k=TOP_K, **f)
+                lat_samples[c][i].append(r.seconds)
+                runs[c][i] = r
+    for c in configs:  # latency of a query = median over repeats
+        for i, r in enumerate(runs[c]):
+            r.seconds = statistics.median(lat_samples[c][i])
+    truth = runs[("brute", None)]
     truth_ids = [[r.review_id for r in x.rows] for x in truth]
     truth_floor = [x.rows[-1].score if x.rows else float("-inf") for x in truth]  # 10th-best exact score
 
@@ -95,8 +106,7 @@ def main() -> int:
 
     rows_out = [summarize("brute force", truth, None)]
     for npb in NPROBES:
-        log.info("ivf nprobe=%d...", npb)
-        rows_out.append(summarize(f"IVF nprobe={npb}", run_config("ivf", npb), npb))
+        rows_out.append(summarize(f"IVF nprobe={npb}", runs[("ivf", npb)], npb))
 
     base = rows_out[0]
     for r in rows_out:
@@ -104,7 +114,7 @@ def main() -> int:
         r["files_scanned_pct_of_brute"] = round(100 * r["mean_files_scanned"] / base["mean_files_scanned"], 1)
 
     out = {"queries": len(queries), "top_k": TOP_K, "gold_rows": total_rows, "gold_data_files": total_files,
-           "ivf_k": len(C), "results": rows_out}
+           "ivf_k": len(C), "repeats": repeats, "results": rows_out}
     BENCH_DIR.mkdir(exist_ok=True)
     (BENCH_DIR / "ivf_benchmark.json").write_text(json.dumps(out, indent=2))
 
@@ -116,7 +126,8 @@ def main() -> int:
                      f"{r['recall_at_10']:.3f} | {r['recall_at_10_tie_aware']:.3f} |")
     md = f"""# IVF benchmark (Iceberg + Spark)
 
-{len(queries)} hybrid queries (SQL filters on date/status + vector similarity), top-{TOP_K}. Gold table: {total_rows} rows in
+{len(queries)} hybrid queries (SQL filters on date/status + vector similarity), top-{TOP_K}; each query/config run
+{repeats}x back to back and the median latency kept. Gold table: {total_rows} rows in
 {total_files} data files, k={len(C)} clusters. Recall@10 is measured against exact brute force with the same filters.
 "Data files scanned" and "rows read" come from Iceberg's scan metrics (they already include date-partition pruning,
 which brute force benefits from too).

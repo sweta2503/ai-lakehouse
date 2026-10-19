@@ -1,21 +1,23 @@
 # IVF benchmark (Iceberg + Spark)
 
-50 hybrid queries (SQL filters on date/status + vector similarity), top-10. Gold table: 3617 rows in
-23 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
+50 hybrid queries (SQL filters on date/status + vector similarity), top-10; each query/config run
+3x back to back and the median latency kept. Gold table: 35977 rows in
+182 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
 "Data files scanned" and "rows read" come from Iceberg's scan metrics (they already include date-partition pruning,
 which brute force benefits from too).
 
-| Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| brute force | 139.9 | 163.4 | 1.0x | 11.6 | 100.0% | 1892 | 1.000 |
-| IVF nprobe=1 | 173.2 | 245.3 | 0.81x | 9.8 | 84.5% | 1699 | 0.776 |
-| IVF nprobe=3 | 161.6 | 218.7 | 0.87x | 10.7 | 92.2% | 1839 | 0.942 |
-| IVF nprobe=5 | 169.1 | 222.9 | 0.83x | 11.1 | 95.7% | 1867 | 0.970 |
-| IVF nprobe=10 | 172.3 | 252.8 | 0.81x | 11.4 | 98.3% | 1886 | 0.980 |
+| Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| brute force | 334.9 | 481.6 | 1.0x | 94.7 | 100.0% | 18921 | 1.000 | 1.000 |
+| IVF nprobe=1 | 216.1 | 271.5 | 1.55x | 9.9 | 10.5% | 2098 | 0.786 | 0.808 |
+| IVF nprobe=3 | 253.6 | 317.1 | 1.32x | 26.4 | 27.9% | 5556 | 0.936 | 0.966 |
+| IVF nprobe=5 | 284.1 | 388.2 | 1.18x | 39.7 | 41.9% | 8250 | 0.948 | 0.970 |
+| IVF nprobe=10 | 342.7 | 457.4 | 0.98x | 58.4 | 61.7% | 12036 | 0.986 | 0.996 |
 
-**Scale caveat:** this is a laptop-sized table. Each query pays a roughly fixed Spark job + Iceberg planning
-overhead (tens to hundreds of ms) that dwarfs the actual scoring work on a few thousand vectors, so latency
-differences are small and mostly noise-bounded; the file/row counts are the more reliable signal of what IVF
-saves, and that saving only turns into large latency wins when the table is much bigger than this. The reviews
-(especially the synthetic ones) are also unusually clusterable, so recall here is likely higher than on messy
-real-world data.
+**Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
+regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the
+savings from scanning fewer files; the files-scanned and rows-read columns show what IVF skips independent of that
+overhead. Latency wins from IVF should grow with table size, but this run does not measure that. The reviews
+(especially synthetic ones) are also much more clusterable than messy real-world text, so recall here may be
+optimistic. "recall@10 tie-aware" counts a result as correct if it scores as high as the exact 10th-best result,
+because many reviews share identical text and therefore identical vectors.

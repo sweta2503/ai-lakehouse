@@ -16,6 +16,7 @@ Usage:  python 07_gold_write.py [--fragment N] [--compact]
   --compact     afterwards run rewrite_data_files(strategy => 'sort') and show before/after file counts
 """
 import argparse
+import math
 import sys
 from typing import Iterator
 
@@ -25,7 +26,8 @@ from pyspark.sql import functions as F
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import IntegerType
 
-from common import T_CENTROIDS, T_GOLD, T_SILVER, TARGET_FILE_SIZE_BYTES, get_logger, get_spark, section, timed
+from common import (EMBEDDING_DIM, T_CENTROIDS, T_GOLD, T_SILVER, TARGET_FILE_SIZE_BYTES, get_logger, get_spark,
+                    section, timed)
 
 log = get_logger("gold")
 
@@ -86,10 +88,29 @@ def main() -> int:
             -- would leave Iceberg's 512 MB default and get the same effect with far more rows.
             'write.target-file-size-bytes' = '{TARGET_FILE_SIZE_BYTES}',
             -- no min/max stats for the 384-float array: useless for pruning and bloats manifests
-            'write.metadata.metrics.column.embedding' = 'none')""")
+            'write.metadata.metrics.column.embedding' = 'none',
+            -- Read-side tuning for DEMO-SIZED data, applied to every query mode alike. By default Iceberg packs
+            -- small files into ~128 MB read tasks (and counts each file as >= 4 MB), which would squeeze this whole
+            -- table into one or two Spark tasks. Smaller values let the scan use all cores.
+            'read.split.target-size' = '{TARGET_FILE_SIZE_BYTES}',
+            'read.split.open-file-cost' = '65536')""")
     # Table-level sort order. Every write (Spark respects it) now sorts rows by cluster_id inside each partition.
     spark.sql(f"ALTER TABLE {T_GOLD} WRITE ORDERED BY cluster_id")
     log.info("table sort order: %s", spark.sql(f"SHOW TBLPROPERTIES {T_GOLD}").where("key = 'sort-order'").first().value)
+
+    # File-size control on small data. `write.target-file-size-bytes` alone did NOT give small files here
+    # (first run: avg 782 KB per file vs a 256 KB target) — the writer only rolls to a new file after a batch of
+    # rows, so each file holds at least a few hundred to a thousand rows. What reliably sets the file count is the
+    # number of write tasks: the sorted write range-partitions rows by (month, cluster_id) into
+    # spark.sql.shuffle.partitions tasks, and each task writes one contiguous slice. So we size that to
+    # (estimated bytes / target file size) and switch AQE off so it is not coalesced back down.
+    n_rows = df.count()
+    est_bytes = n_rows * (EMBEDDING_DIM * 4 * 0.7 + 150)  # float32 vectors compress ~30% with zstd (measured ~1.08 KB/row)
+    n_tasks = max(8, math.ceil(est_bytes / TARGET_FILE_SIZE_BYTES / a.fragment))
+    spark.conf.set("spark.sql.adaptive.enabled", "false")
+    spark.conf.set("spark.sql.shuffle.partitions", str(n_tasks))
+    log.info("%d rows, ~%.0f MB -> %d write tasks per append (aiming for ~%d KB files)", n_rows, est_bytes / 1e6,
+             n_tasks, TARGET_FILE_SIZE_BYTES // 1024)
 
     with timed(f"write gold ({a.fragment} append(s))", log):
         if a.fragment <= 1:
