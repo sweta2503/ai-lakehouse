@@ -9,7 +9,7 @@ SINCE ?= 2018-01-01
 STATUS ?= delivered
 NPROBE ?= 3
 
-.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect bonus test smoke all clean
+.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect results bonus test smoke all clean
 
 help:
 	@grep -E '^[a-z-]+:' Makefile | grep -v '^\.PHONY' | cut -d: -f1 | tr '\n' ' '; echo
@@ -43,6 +43,7 @@ gold: ; $(PY) src/07_gold_write.py
 query: ; $(PY) src/08_hybrid_query.py --query "$(Q)" --since $(SINCE) --status $(STATUS) --nprobe $(NPROBE) --mode ivf
 bench: ; $(PY) src/09_benchmark.py
 inspect: ; $(PY) src/10_inspect_iceberg_metadata.py
+results: ; $(PY) scripts/render_results.py   ## copy benchmarks/ into README
 
 bonus:  ## optional: Qdrant comparison
 ifdef UV
@@ -52,6 +53,7 @@ else
 endif
 	docker compose --profile bonus up -d qdrant
 	$(PY) src/bonus_qdrant_compare.py
+	$(PY) scripts/render_results.py
 
 test: ; $(PY) -m pytest -v tests
 
@@ -61,8 +63,8 @@ smoke:
 	SAMPLE_ROWS=5000 $(MAKE) data bronze drift silver index gold test
 
 # Core flow. (bronze already ingests; drift appends a second batch afterwards.)
-all: data bronze drift embed-bench silver index gold query bench inspect
+all: data bronze drift embed-bench silver index gold query bench inspect results
 
 clean:  ## remove local state (keeps .venv and .ivy2 jar cache)
 	docker compose --profile bonus down -v
-	rm -rf spark-warehouse metastore_db derby.log benchmarks/*.json benchmarks/*.md data/*.csv
+	rm -rf spark-warehouse metastore_db derby.log benchmarks/*.json benchmarks/*.md data/synthetic data/landing
