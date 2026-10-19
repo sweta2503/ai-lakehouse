@@ -144,6 +144,10 @@ def get_spark(app_name: str = "ai-lakehouse", shuffle_partitions: int | None = N
     # macOS: forking after torch/Obj-C init can abort workers without this.
     os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    # Python workers must be able to `import embeddings` (UDFs reference it by module).
+    src = str(ROOT / "src")
+    if src not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+        os.environ["PYTHONPATH"] = src + os.pathsep + os.environ.get("PYTHONPATH", "")
 
     from pyspark.sql import SparkSession
 
