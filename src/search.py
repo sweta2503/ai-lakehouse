@@ -8,7 +8,8 @@ ivf   : find the `nprobe` centroids closest to the query (in Python, from lake.g
         cluster_id, Iceberg's file min/max statistics let the planner skip the files of all other clusters.
 
 Score = dot(query, embedding), computed with Spark SQL higher-order functions. Both are unit vectors, so
-this is cosine similarity. Ties are broken by review_id so results are deterministic (important when
+this is cosine similarity. Ties are broken by (review_id, order_id) — review_id alone is NOT unique in real
+Olist data (1,603 rows share one) — so results are deterministic (important when
 comparing brute force and IVF: identical vectors would otherwise tie in arbitrary order).
 """
 from dataclasses import dataclass, field
@@ -82,7 +83,7 @@ def build_query(spark, q: np.ndarray, *, clusters=None, since=None, until=None, 
         df = df.where(F.col("cluster_id").isin(*clusters))
     return (df.select("review_id", "order_id", "purchase_ts", "order_status", "review_score", "review_text",
                       "cluster_id", score.alias("score"))
-            .orderBy(F.desc("score"), F.asc("review_id")).limit(top_k))
+            .orderBy(F.desc("score"), F.asc("review_id"), F.asc("order_id")).limit(top_k))
 
 
 def search(spark, q: np.ndarray, *, mode="ivf", C=None, nprobe=3, since=None, until=None, status=None,

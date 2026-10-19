@@ -5,10 +5,10 @@ Measured on this machine; the model is already loaded in every worker (warm-up e
 
 | Approach | Rows | Seconds | Rows/sec | Speedup vs naive |
 |---|---:|---:|---:|---:|
-| Naive `udf` (1 row per `encode`) | 20000 | 49.7 | 402 | 1.00x |
-| Batched `pandas_udf` (batch_size=64) | 20000 | 22.3 | 897 | 2.23x |
-| ANTI-PATTERN: load model every row | 100 | 54.1 | 1.85 | n/a (tiny N) |
+| Naive `udf` (1 row per `encode`) | 20000 | 45.4 | 441 | 1.00x |
+| Batched `pandas_udf` (batch_size=64) | 20000 | 21.5 | 929 | 2.11x |
+| ANTI-PATTERN: load model every row | 100 | 50.0 | 2.00 | n/a (tiny N) |
 
 The anti-pattern row ran on only 100 rows, because it is that slow; compare rows/sec, not seconds.
-Batched vs the anti-pattern: 485.6x in rows/sec.
+Batched vs the anti-pattern: 464.0x in rows/sec.
 Naive and batched vectors agree (min cosine similarity 1.000000 over 200 rows).

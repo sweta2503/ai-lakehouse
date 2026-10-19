@@ -84,14 +84,14 @@ def main() -> int:
         for i, r in enumerate(runs[c]):
             r.seconds = statistics.median(lat_samples[c][i])
     truth = runs[("brute", None)]
-    truth_ids = [[r.review_id for r in x.rows] for x in truth]
+    truth_ids = [[(r.review_id, r.order_id) for r in x.rows] for x in truth]  # key = (review_id, order_id): review_id alone repeats in Olist
     truth_floor = [x.rows[-1].score if x.rows else float("-inf") for x in truth]  # 10th-best exact score
 
     def summarize(name, res, nprobe):
         lat = [x.seconds * 1000 for x in res]
         recalls, recalls_tie = [], []
         for x, gt, floor in zip(res, truth_ids, truth_floor):
-            got = {r.review_id for r in x.rows}
+            got = {(r.review_id, r.order_id) for r in x.rows}
             recalls.append(len(got & set(gt)) / len(gt) if gt else 1.0)
             # tie-aware: a result counts if it scores at least as high as the exact 10th-best (identical
             # vectors are interchangeable, so which of them is returned is arbitrary)

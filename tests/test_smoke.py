@@ -76,7 +76,7 @@ def test_ivf_with_all_clusters_equals_brute_force(spark, C, text):
     q = encode_texts([text])[0]
     brute = search(spark, q, mode="brute", top_k=10)
     ivf = search(spark, q, mode="ivf", C=C, nprobe=len(C), top_k=10)
-    assert [r.review_id for r in ivf.rows] == [r.review_id for r in brute.rows]
+    assert [(r.review_id, r.order_id) for r in ivf.rows] == [(r.review_id, r.order_id) for r in brute.rows]
 
 
 def test_ivf_small_nprobe_scans_fewer_or_equal_files(spark, C):
