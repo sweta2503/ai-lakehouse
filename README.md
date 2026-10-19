@@ -92,6 +92,19 @@ The query is embedded locally, the nearest `nprobe` centroids are found in Pytho
 **M6 Metadata inspection** (`10_inspect_iceberg_metadata.py`).
 Prints `snapshots`, `history`, `manifests`, `files`, `partitions` for the gold table, then lists the physical objects in MinIO with boto3: the **table metadata JSON** files, the **manifest list** (`snap-*.avro`), the **manifest files** (`*-m0.avro`) and the **Parquet data files**, and decodes the newest metadata JSON (format version, partition spec, sort order, properties).
 
+## Search UI (for demos)
+
+```bash
+make ui     # needs `make up` and a built gold table (make all)
+```
+
+Open http://localhost:8765. Type a query, choose IVF or brute force, move the `nprobe` slider, add date/status filters.
+The page shows latency, **data files scanned of total** (Iceberg's own scan metrics), rows read, and a map of the
+k clusters showing which were probed and which contain a result. **Compare IVF vs brute** runs both and shows this
+query's recall (by id and tie-aware) next to both result lists. The server keeps one Spark session alive, so the
+Spark UI (http://localhost:4040, SQL tab shows the `BatchScan` metrics) and MinIO console (http://localhost:9001) are
+available alongside. Change the port with `UI_PORT`.
+
 ## Results
 
 Everything below is copied from `benchmarks/` by `scripts/render_results.py` (run at the end of `make all`); nothing is typed by hand.
@@ -233,7 +246,7 @@ Notes
 ```
 docker-compose.yml  .env.example  Makefile  requirements.txt  versions.md
 scripts/   download_data.sh  generate_synthetic_data.py  wait_for_services.sh  render_results.py
-src/       common.py  data_source.py  embeddings.py  search.py  01_…10_*.py  bonus_qdrant_compare.py
+src/       common.py  data_source.py  embeddings.py  search.py  ui_server.py  ui/index.html  01_…10_*.py  bonus_qdrant_compare.py
 tests/     test_smoke.py
 benchmarks/  measured results (json + markdown)
 docs/      architecture.md

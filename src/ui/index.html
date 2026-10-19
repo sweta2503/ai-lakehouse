@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Lakehouse Search</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--mute:#5d6673;--line:#e1e5ea;--acc:#2f6fed;--acc2:#12a37f;--warn:#d9822b;--probe:#2f6fed;--hit:#12a37f}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1216;--card:#171b21;--ink:#e8ebef;--mute:#9099a6;--line:#2a313a;--acc:#6b9bff;--acc2:#3ccba5;--warn:#f0a35a;--probe:#6b9bff;--hit:#3ccba5}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:14px}
+h1{font-size:22px;margin:0}header small{color:var(--mute)}header a{color:var(--acc);margin-left:12px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:4px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+input[type=text]{width:100%;font-size:18px;padding:12px}
+input[type=range]{padding:0;accent-color:var(--acc)}
+button{font:inherit;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;background:var(--acc);color:#fff;font-weight:600}
+button.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}button:disabled{opacity:.5;cursor:wait}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg label{flex-direction:row;color:var(--ink);padding:8px 14px;cursor:pointer;font-size:14px}
+.seg input{display:none}.seg label:has(input:checked){background:var(--acc);color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.chip{font-size:13px;color:var(--acc);border:1px solid var(--line);border-radius:99px;padding:3px 10px;cursor:pointer;background:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px}.stat b{display:block;font-size:24px}.stat span{font-size:12px;color:var(--mute)}
+.bar{height:8px;background:var(--line);border-radius:4px;margin-top:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc2)}
+.clusters{display:grid;grid-template-columns:repeat(25,1fr);gap:3px;margin-top:8px}
+.cl{aspect-ratio:1;border-radius:4px;background:var(--line);font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--mute);position:relative}
+.cl.probe{background:var(--probe);color:#fff}.cl.hit{outline:2px solid var(--hit);outline-offset:1px}
+.legend{font-size:12px;color:var(--mute);margin-top:6px}.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 4px 0 10px;vertical-align:-1px}
+.res{border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:70px 1fr;gap:12px}.res:first-child{border-top:0}
+.sc{font-weight:700;font-variant-numeric:tabular-nums}.meta{font-size:12px;color:var(--mute)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.cols{grid-template-columns:1fr}.clusters{grid-template-columns:repeat(10,1fr)}}
+h3{margin:0 0 8px;font-size:15px}.tag{font-size:11px;border-radius:5px;padding:1px 6px;background:var(--line);margin-left:6px}
+.miss{background:color-mix(in srgb,var(--warn) 18%,transparent)}.err{color:#d33;padding:8px}
+.note{font-size:13px;color:var(--mute)}
+</style></head><body><div class="wrap">
+<header><h1>AI Lakehouse Search <small id="sub"></small></h1>
+<div><a id="sparkui" target="_blank">Spark UI</a><a href="http://localhost:9001" target="_blank">MinIO</a></div></header>
+
+<div class="card">
+  <input id="q" type="text" placeholder="Search reviews by meaning, e.g. &quot;package arrived damaged&quot;" autofocus>
+  <div class="chips" id="chips"></div>
+  <div class="row" style="margin-top:14px">
+    <div class="seg"><label><input type="radio" name="mode" value="ivf" checked>IVF</label><label><input type="radio" name="mode" value="brute">Brute force</label></div>
+    <label style="min-width:170px"><span>nprobe: <b id="npv" style="color:var(--ink)">3</b></span><input id="np" type="range" min="1" max="50" value="3"></label>
+    <label>Since<input id="since" type="date"></label><label>Until<input id="until" type="date"></label>
+    <label>Status<select id="status"><option value="">any</option></select></label>
+    <label>Top-k<select id="k"><option>5</option><option selected>10</option><option>20</option></select></label>
+    <button id="go">Search</button><button id="cmp" class="sec">Compare IVF vs brute</button>
+  </div>
+</div>
+<div id="out"></div>
+<p class="note" id="foot"></p>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const EX=["package arrived damaged","delivery took forever","excellent quality, very happy","I want a refund","the seller never answered","chegou atrasado","wrong item sent"];
+let meta=null;
+EX.forEach(t=>{const b=document.createElement('button');b.className='chip';b.textContent=t;b.onclick=()=>{$('q').value=t;run(false)};$('chips').appendChild(b)});
+$('np').oninput=()=>$('npv').textContent=$('np').value;
+$('q').addEventListener('keydown',e=>{if(e.key==='Enter')run(false)});
+$('go').onclick=()=>run(false);$('cmp').onclick=()=>run(true);
+fetch('/api/meta').then(r=>r.json()).then(m=>{meta=m;
+  $('sub').textContent=`${m.rows.toLocaleString()} vectors · ${m.total_files} Iceberg data files · ${m.k} clusters`;
+  $('np').max=m.k;$('sparkui').href=m.spark_ui||'http://localhost:4040';
+  m.statuses.forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;$('status').appendChild(o)});
+  $('since').min=$('until').min=m.lo;$('since').max=$('until').max=m.hi;
+  $('foot').textContent=`Data range ${m.lo} to ${m.hi}. Scores are cosine similarity. Files scanned comes from Iceberg's own scan metrics.`});
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function stat(v,l,extra=''){return `<div class="stat"><b>${v}</b><span>${l}</span>${extra}</div>`}
+function statsHtml(r){const pct=r.files_total?100*r.files_scanned/r.files_total:0;
+  return `<div class="stats">${stat(r.latency_ms+' ms','latency')}${stat(`${r.files_scanned} / ${r.files_total}`,'data files scanned',`<div class="bar"><i style="width:${pct}%"></i></div>`)}${stat((r.rows_read??0).toLocaleString(),'rows read')}${stat(r.clusters?r.clusters.length:'all','clusters probed')}</div>`}
+function clusterMap(sims,r){const probe=new Set(r.clusters||[]),hit=new Set(r.rows.map(x=>x.cluster));
+  return `<div class="clusters">${sims.map((s,i)=>`<div class="cl ${probe.has(i)?'probe':''} ${hit.has(i)?'hit':''}" title="cluster ${i}: cos ${s}">${i}</div>`).join('')}</div>
+  <div class="legend"><span class="dot" style="background:var(--probe)"></span>probed by IVF<span class="dot" style="outline:2px solid var(--hit)"></span>contains a result</div>`}
+function results(r,floor){return r.rows.length?r.rows.map((x,i)=>`<div class="res ${floor!==undefined&&x.score<floor-1e-4?'miss':''}"><div class="sc">${x.score.toFixed(3)}<div class="meta">#${i+1}</div></div><div>${esc(x.text)}<div class="meta">${x.date} · ${x.status} · ${'★'.repeat(x.stars)} · cluster ${x.cluster}</div></div></div>`).join(''):'<p class="note">No rows match these filters.</p>'}
+async function run(compare){const query=$('q').value.trim();if(!query)return $('q').focus();
+  $('go').disabled=$('cmp').disabled=true;$('out').innerHTML='<div class="card note">Searching…</div>';
+  const body={query,compare,mode:document.querySelector('[name=mode]:checked').value,nprobe:$('np').value,since:$('since').value,until:$('until').value,status:$('status').value,top_k:$('k').value};
+  try{const res=await fetch('/api/search',{method:'POST',body:JSON.stringify(body)});const d=await res.json();if(d.error)throw new Error(d.error);
+    if(compare){const t=d.brute.rows.length?d.brute.rows[d.brute.rows.length-1].score:undefined;
+      $('out').innerHTML=`<div class="card"><h3>Recall@${body.top_k} for this query: ${(d.recall*100).toFixed(0)}% by id <span class="tag">tie-aware ${(d.recall_tie*100).toFixed(0)}%</span></h3>
+        <p class="note">IVF with nprobe=${body.nprobe} vs exact brute force. Orange rows on the IVF side score below brute force's 10th-best result, so they are real misses. Results that differ only by ties between identical reviews are not flagged.</p>${clusterMap(d.cluster_sims,d.ivf)}</div>
+        <div class="cols"><div class="card"><h3>IVF <span class="tag">nprobe ${body.nprobe}</span></h3>${statsHtml(d.ivf)}${results(d.ivf,t)}</div>
+        <div class="card"><h3>Brute force <span class="tag">exact</span></h3>${statsHtml(d.brute)}${results(d.brute)}</div></div>`}
+    else{const r=d.result;$('out').innerHTML=`<div class="card"><h3>${r.mode==='ivf'?'IVF · nprobe '+body.nprobe:'Brute force'}</h3>${statsHtml(r)}${r.mode==='ivf'?clusterMap(d.cluster_sims,r):''}</div><div class="card">${results(r)}</div>`}
+  }catch(e){$('out').innerHTML=`<div class="card err">${esc(e.message)}</div>`}
+  $('go').disabled=$('cmp').disabled=false}
+</script></body></html>
