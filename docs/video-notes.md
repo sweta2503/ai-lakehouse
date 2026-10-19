@@ -85,7 +85,7 @@ make bench      # pre-run; show benchmarks/ivf_benchmark.md
 ## Results (auto-filled from `benchmarks/`)
 
 <!-- BENCH:headline:START -->
-On this machine, batched `pandas_udf` was **2.52x** faster than the naive row-by-row UDF (588 vs 234 rows/s over 20000 rows).
+On this machine, batched `pandas_udf` was **2.19x** faster than the naive row-by-row UDF (920 vs 419 rows/s over 20000 rows).
 <!-- BENCH:headline:END -->
 
 <!-- BENCH:ivf:START -->
@@ -97,11 +97,11 @@ which brute force benefits from too).
 
 | Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| brute force | 352.9 | 518.1 | 1.0x | 94.7 | 100.0% | 18921 | 1.000 | 1.000 |
-| IVF nprobe=1 | 231.1 | 284.1 | 1.53x | 9.9 | 10.5% | 2098 | 0.786 | 0.808 |
-| IVF nprobe=3 | 264.4 | 319.6 | 1.33x | 26.4 | 27.9% | 5556 | 0.936 | 0.966 |
-| IVF nprobe=5 | 302.7 | 414.3 | 1.17x | 39.7 | 41.9% | 8250 | 0.948 | 0.970 |
-| IVF nprobe=10 | 364.4 | 504.7 | 0.97x | 58.4 | 61.7% | 12036 | 0.986 | 0.996 |
+| brute force | 335.3 | 482.6 | 1.0x | 94.7 | 100.0% | 18921 | 1.000 | 1.000 |
+| IVF nprobe=1 | 215.5 | 273.8 | 1.56x | 9.9 | 10.5% | 2098 | 0.786 | 0.808 |
+| IVF nprobe=3 | 252.3 | 328.5 | 1.33x | 26.4 | 27.9% | 5556 | 0.936 | 0.966 |
+| IVF nprobe=5 | 284.2 | 374.4 | 1.18x | 39.7 | 41.9% | 8250 | 0.948 | 0.970 |
+| IVF nprobe=10 | 349.9 | 483.4 | 0.96x | 58.4 | 61.7% | 12036 | 0.986 | 0.996 |
 
 **Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
 regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the
