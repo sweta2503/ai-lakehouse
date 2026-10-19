@@ -1,25 +1,27 @@
 # AI Lakehouse infra: MinIO (S3) + Iceberg REST catalog. Qdrant only with `--profile bonus`.
 #
-# Image note: the official minio/minio images were removed from Docker Hub/Quay in 2025,
-# so we use the (frozen) bitnamilegacy builds of the same MinIO server and client.
+# Image note: the official minio/minio images were removed from Docker Hub/Quay in 2025.
+#  * Server: pgsty/minio, a maintained community fork that keeps the web console (the frozen
+#    bitnamilegacy/minio build starts with --console-address but serves NO console, so :9001 is dead).
+#  * Client (one-shot bucket creation): the frozen bitnamilegacy/minio-client.
 # Fine for a local demo; not something to run in production.
 name: ai-lakehouse
 
 services:
   minio:
-    image: bitnamilegacy/minio:2025.7.23
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: server /data --console-address ":9001"
     container_name: lakehouse-minio
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      MINIO_DEFAULT_BUCKETS: ""
     ports:
       - "9000:9000"   # S3 API
       - "9001:9001"   # web console
     volumes:
-      - minio-data:/bitnami/minio/data
+      - minio-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "mc ready local || curl -fs http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "mc ready local"]
       interval: 5s
       timeout: 5s
       retries: 20

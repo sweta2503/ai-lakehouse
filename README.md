@@ -173,7 +173,10 @@ because many reviews share identical text and therefore identical vectors.
 Entries marked ✅ were hit and fixed while building this repo; ⚠️ ones are things I could not reproduce here and are documented as guidance only.
 
 **✅ `pull access denied for minio/minio` (or 401 from quay.io).**
-The official `minio/minio` images were removed from Docker Hub/Quay. This repo uses the frozen `bitnamilegacy/minio` and `bitnamilegacy/minio-client` builds (pinned in `docker-compose.yml`). Fine for local demos; swap in your own S3-compatible store for anything else.
+The official `minio/minio` images were removed from Docker Hub/Quay. This repo uses the community fork `pgsty/minio` for the server and the frozen `bitnamilegacy/minio-client` for bucket creation (both pinned in `docker-compose.yml`). Fine for local demos; swap in your own S3-compatible store for anything else.
+
+**✅ MinIO console (http://localhost:9001) does not load, though the S3 API on 9000 works.**
+The first image I pinned, `bitnamilegacy/minio:2025.7.23`, is started with `--console-address :9001` but nothing listens on 9001 (I checked from inside the container), so the web UI simply isn't in that build. `pgsty/minio` serves it. Login: `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env` (default `minioadmin` / `minioadmin`).
 
 **✅ REST catalog exits immediately: `SQLITE_CANTOPEN: Unable to open the database file`.**
 The fixture keeps its catalog in SQLite; with a persistent named volume mounted at `/catalog-data` the image's default user can't create the file. The compose file runs that one container as root (`user: "0:0"`). Without a persistent volume the catalog (the list of tables) is lost whenever the container is recreated, even though the data stays in MinIO.

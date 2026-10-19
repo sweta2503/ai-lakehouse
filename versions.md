@@ -10,7 +10,7 @@ Single source of truth for the Iceberg version is `ICEBERG_VERSION` in `.env` / 
 | Spark / PySpark | 3.5.6 | Scala 2.12 build |
 | Java | 17 (OpenJDK 17.0.x) | `brew install openjdk@17`; `common.py` finds it without touching your PATH |
 | Python | 3.11 | |
-| MinIO | `bitnamilegacy/minio:2025.7.23` | official `minio/minio` images are no longer pullable |
+| MinIO | `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` | community fork; official `minio/minio` images are gone, and the frozen `bitnamilegacy/minio` build has no web console |
 | MinIO client | `bitnamilegacy/minio-client:2025.4.16` | one-shot bucket creation |
 | Qdrant (bonus) | `qdrant/qdrant:v1.14.1` | |
 | sentence-transformers | 3.4.1 | model: `paraphrase-multilingual-MiniLM-L12-v2` (384 dims) |
