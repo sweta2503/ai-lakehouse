@@ -9,7 +9,7 @@ SINCE ?= 2018-01-01
 STATUS ?= delivered
 NPROBE ?= 3
 
-.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect bonus test all clean
+.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect bonus test smoke all clean
 
 help:
 	@grep -E '^[a-z-]+:' Makefile | grep -v '^\.PHONY' | cut -d: -f1 | tr '\n' ' '; echo
@@ -49,6 +49,11 @@ bonus:  ## optional: Qdrant comparison
 	$(PY) src/bonus_qdrant_compare.py
 
 test: ; $(PY) -m pytest -v tests
+
+# Fast end-to-end check on 5,000 rows (skips the slow embedding benchmark), then the tests.
+# WARNING: rebuilds bronze/silver/gold, replacing a full-size lakehouse.
+smoke:
+	SAMPLE_ROWS=5000 $(MAKE) data bronze drift silver index gold test
 
 # Core flow. (bronze already ingests; drift appends a second batch afterwards.)
 all: data bronze drift embed-bench silver index gold query bench inspect
