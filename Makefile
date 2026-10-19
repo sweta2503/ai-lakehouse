@@ -9,7 +9,7 @@ SINCE ?= 2018-01-01
 STATUS ?= delivered
 NPROBE ?= 3
 
-.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect results bonus test smoke all clean
+.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect results ui bonus test smoke all clean
 
 help:
 	@grep -E '^[a-z-]+:' Makefile | grep -v '^\.PHONY' | cut -d: -f1 | tr '\n' ' '; echo
@@ -43,6 +43,9 @@ gold: ; $(PY) src/07_gold_write.py
 query: ; $(PY) src/08_hybrid_query.py --query "$(Q)" --since $(SINCE) --status $(STATUS) --nprobe $(NPROBE) --mode ivf
 bench: ; $(PY) src/09_benchmark.py
 inspect: ; $(PY) src/10_inspect_iceberg_metadata.py
+ui:  ## search UI at http://localhost:8765 (needs `make up` + a built gold table)
+	$(PY) src/ui_server.py
+
 results: ; $(PY) scripts/render_results.py   ## copy benchmarks/ into README
 
 bonus:  ## optional: Qdrant comparison
