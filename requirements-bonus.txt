@@ -1,0 +1,2 @@
+# Only needed for the optional Qdrant bonus (make bonus installs this)
+qdrant-client==1.14.2

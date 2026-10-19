@@ -45,6 +45,11 @@ bench: ; $(PY) src/09_benchmark.py
 inspect: ; $(PY) src/10_inspect_iceberg_metadata.py
 
 bonus:  ## optional: Qdrant comparison
+ifdef UV
+	$(UV) pip install --python $(PY) -r requirements-bonus.txt
+else
+	$(PY) -m pip install -r requirements-bonus.txt
+endif
 	docker compose --profile bonus up -d qdrant
 	$(PY) src/bonus_qdrant_compare.py
 

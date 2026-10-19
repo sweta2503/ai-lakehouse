@@ -74,18 +74,24 @@ def main() -> int:
     log.info("brute force (ground truth)...")
     truth = run_config("brute")
     truth_ids = [[r.review_id for r in x.rows] for x in truth]
+    truth_floor = [x.rows[-1].score if x.rows else float("-inf") for x in truth]  # 10th-best exact score
 
     def summarize(name, res, nprobe):
         lat = [x.seconds * 1000 for x in res]
-        recalls = []
-        for x, gt in zip(res, truth_ids):
+        recalls, recalls_tie = [], []
+        for x, gt, floor in zip(res, truth_ids, truth_floor):
             got = {r.review_id for r in x.rows}
             recalls.append(len(got & set(gt)) / len(gt) if gt else 1.0)
+            # tie-aware: a result counts if it scores at least as high as the exact 10th-best (identical
+            # vectors are interchangeable, so which of them is returned is arbitrary)
+            good = sum(1 for r in x.rows if r.score >= floor - 1e-4)
+            recalls_tie.append(min(good, len(gt)) / len(gt) if gt else 1.0)
         files = [x.metrics.get("resultDataFiles", 0) for x in res]
         rows = [x.metrics.get("numOutputRows", 0) for x in res]
         return {"config": name, "nprobe": nprobe, "mean_ms": round(statistics.mean(lat), 1), "p95_ms": round(pct(lat, 95), 1),
                 "mean_files_scanned": round(statistics.mean(files), 1), "mean_rows_scanned": round(statistics.mean(rows), 0),
-                "recall_at_10": round(statistics.mean(recalls), 4), "min_recall": round(min(recalls), 3)}
+                "recall_at_10": round(statistics.mean(recalls), 4), "recall_at_10_tie_aware": round(statistics.mean(recalls_tie), 4),
+                "min_recall": round(min(recalls), 3)}
 
     rows_out = [summarize("brute force", truth, None)]
     for npb in NPROBES:
@@ -102,12 +108,12 @@ def main() -> int:
     BENCH_DIR.mkdir(exist_ok=True)
     (BENCH_DIR / "ivf_benchmark.json").write_text(json.dumps(out, indent=2))
 
-    lines = ["| Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 |",
-             "|---|---:|---:|---:|---:|---:|---:|---:|"]
+    lines = ["| Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for r in rows_out:
         lines.append(f"| {r['config']} | {r['mean_ms']} | {r['p95_ms']} | {r['latency_speedup_vs_brute']}x | "
                      f"{r['mean_files_scanned']} | {r['files_scanned_pct_of_brute']}% | {int(r['mean_rows_scanned'])} | "
-                     f"{r['recall_at_10']:.3f} |")
+                     f"{r['recall_at_10']:.3f} | {r['recall_at_10_tie_aware']:.3f} |")
     md = f"""# IVF benchmark (Iceberg + Spark)
 
 {len(queries)} hybrid queries (SQL filters on date/status + vector similarity), top-{TOP_K}. Gold table: {total_rows} rows in
@@ -117,12 +123,13 @@ which brute force benefits from too).
 
 {chr(10).join(lines)}
 
-**Scale caveat:** this is a laptop-sized table. Each query pays a roughly fixed Spark job + Iceberg planning
-overhead (tens to hundreds of ms) that dwarfs the actual scoring work on a few thousand vectors, so latency
-differences are small and mostly noise-bounded; the file/row counts are the more reliable signal of what IVF
-saves, and that saving only turns into large latency wins when the table is much bigger than this. The reviews
-(especially the synthetic ones) are also unusually clusterable, so recall here is likely higher than on messy
-real-world data.
+**Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
+regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the
+savings from scanning fewer files; the files-scanned and rows-read columns show what IVF skips independent of that
+overhead. Latency wins from IVF should grow with table size, but this run does not measure that. The reviews
+(especially synthetic ones) are also much more clusterable than messy real-world text, so recall here may be
+optimistic. "recall@10 tie-aware" counts a result as correct if it scores as high as the exact 10th-best result,
+because many reviews share identical text and therefore identical vectors.
 """
     (BENCH_DIR / "ivf_benchmark.md").write_text(md)
     print("\n" + md)

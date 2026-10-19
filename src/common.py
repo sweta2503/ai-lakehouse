@@ -60,6 +60,7 @@ TARGET_FILE_SIZE_BYTES = env_int("TARGET_FILE_SIZE_BYTES", 262144)
 SAMPLE_ROWS = env_int("SAMPLE_ROWS")  # None = all rows
 DATA_DIR = ROOT / env("DATA_DIR", "data")
 BENCH_DIR = ROOT / "benchmarks"
+QDRANT_URL = env("QDRANT_URL", "http://localhost:6333")
 CATALOG = "lake"
 
 # Tables (single place so scripts/tests never disagree)
