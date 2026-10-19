@@ -116,7 +116,7 @@ because many reviews share identical text and therefore identical vectors.
 
 ## Likely errors worth keeping in the video (all of these really happened)
 1. **`Unable to locate a Java Runtime`**: Homebrew's `openjdk@17` isn't on PATH. (Fix: `JAVA_HOME`; `common.py` finds it.)
-2. **`pull access denied for minio/minio`**: the official image is gone; we pin `bitnamilegacy/minio`.
+2. **`pull access denied for minio/minio`**: the official image is gone; we pin `pgsty/minio`.
 3. **`SQLITE_CANTOPEN` from the REST catalog**: volume permissions; run the container as root.
 4. **S3 `301 … must be addressed using the specified endpoint`**: Spark is talking to real AWS because the client wasn't told the MinIO endpoint (this fixture doesn't send one). Great teaching moment on the client/server split of endpoint config.
 5. **`UNSUPPORTED_SIGNATURE … Iterator[pd.Series]`**: `from __future__ import annotations` + `pandas_udf`.
