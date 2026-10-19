@@ -87,7 +87,7 @@ Orders joined to reviews → `lake.bronze.reviews` (Iceberg v2, `months(order_pu
 ```bash
 python src/08_hybrid_query.py --query "package arrived damaged" --since 2018-01-01 --status delivered --mode ivf --nprobe 3 --top-k 10
 ```
-The query is embedded locally, the nearest `nprobe` centroids are found in Python, and Spark SQL filters `cluster_id IN (…)` plus date/status and scores with `aggregate(zip_with(embedding, query, …))`. The script prints the pushed-down predicates from `EXPLAIN` and Iceberg's own scan metrics (data files scanned/skipped, rows read). Results are ordered by `(score DESC, review_id)` so ties between identical vectors are deterministic. `09` runs ~50 queries against brute force and IVF at `nprobe` ∈ {1, 3, 5, 10}.
+The query is embedded locally, the nearest `nprobe` centroids are found in Python, and Spark SQL filters `cluster_id IN (…)` plus date/status and scores with `aggregate(zip_with(embedding, query, …))`. The script prints the pushed-down predicates from `EXPLAIN` and Iceberg's own scan metrics (data files scanned/skipped, rows read). Results are ordered by `(score DESC, review_id, order_id)` so ties between identical vectors are deterministic. `09` runs ~50 queries against brute force and IVF at `nprobe` ∈ {1, 3, 5, 10}.
 
 **M6 Metadata inspection** (`10_inspect_iceberg_metadata.py`).
 Prints `snapshots`, `history`, `manifests`, `files`, `partitions` for the gold table, then lists the physical objects in MinIO with boto3: the **table metadata JSON** files, the **manifest list** (`snap-*.avro`), the **manifest files** (`*-m0.avro`) and the **Parquet data files**, and decodes the newest metadata JSON (format version, partition spec, sort order, properties).
@@ -109,11 +109,12 @@ available alongside. Change the port with `UI_PORT`.
 
 Everything below is copied from `benchmarks/` by `scripts/render_results.py` (run at the end of `make all`); nothing is typed by hand.
 Re-run `make embed-bench` / `make bench` to regenerate on your machine.
+The committed results were measured on the **real Olist dataset** (log line `DATA SOURCE: OLIST`), not the synthetic fallback.
 
 ### Embeddings: naive UDF vs batched `pandas_udf`
 
 <!-- BENCH:headline:START -->
-On this machine, batched `pandas_udf` was **2.23x** faster than the naive row-by-row UDF (897 vs 402 rows/s over 20000 rows).
+On this machine, batched `pandas_udf` was **2.11x** faster than the naive row-by-row UDF (929 vs 441 rows/s over 20000 rows).
 <!-- BENCH:headline:END -->
 
 <!-- BENCH:embedding:START -->
@@ -122,12 +123,12 @@ Measured on this machine; the model is already loaded in every worker (warm-up e
 
 | Approach | Rows | Seconds | Rows/sec | Speedup vs naive |
 |---|---:|---:|---:|---:|
-| Naive `udf` (1 row per `encode`) | 20000 | 49.7 | 402 | 1.00x |
-| Batched `pandas_udf` (batch_size=64) | 20000 | 22.3 | 897 | 2.23x |
-| ANTI-PATTERN: load model every row | 100 | 54.1 | 1.85 | n/a (tiny N) |
+| Naive `udf` (1 row per `encode`) | 20000 | 45.4 | 441 | 1.00x |
+| Batched `pandas_udf` (batch_size=64) | 20000 | 21.5 | 929 | 2.11x |
+| ANTI-PATTERN: load model every row | 100 | 50.0 | 2.00 | n/a (tiny N) |
 
 The anti-pattern row ran on only 100 rows, because it is that slow; compare rows/sec, not seconds.
-Batched vs the anti-pattern: 485.6x in rows/sec.
+Batched vs the anti-pattern: 464.0x in rows/sec.
 Naive and batched vectors agree (min cosine similarity 1.000000 over 200 rows).
 <!-- BENCH:embedding:END -->
 
@@ -135,18 +136,18 @@ Naive and batched vectors agree (min cosine similarity 1.000000 over 200 rows).
 
 <!-- BENCH:ivf:START -->
 50 hybrid queries (SQL filters on date/status + vector similarity), top-10; each query/config run
-3x back to back and the median latency kept. Gold table: 35977 rows in
-182 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
+3x back to back and the median latency kept. Gold table: 42687 rows in
+221 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
 "Data files scanned" and "rows read" come from Iceberg's scan metrics (they already include date-partition pruning,
 which brute force benefits from too).
 
 | Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| brute force | 349.7 | 514.3 | 1.0x | 94.7 | 100.0% | 18921 | 1.000 | 1.000 |
-| IVF nprobe=1 | 237.1 | 286.5 | 1.47x | 9.9 | 10.5% | 2098 | 0.786 | 0.808 |
-| IVF nprobe=3 | 264.6 | 341.1 | 1.32x | 26.4 | 27.9% | 5556 | 0.936 | 0.966 |
-| IVF nprobe=5 | 304.1 | 409.6 | 1.15x | 39.7 | 41.9% | 8250 | 0.948 | 0.970 |
-| IVF nprobe=10 | 362.9 | 519.7 | 0.96x | 58.4 | 61.7% | 12036 | 0.986 | 0.996 |
+| brute force | 456.3 | 707.6 | 1.0x | 116.4 | 100.0% | 22643 | 1.000 | 1.000 |
+| IVF nprobe=1 | 254.4 | 336.9 | 1.79x | 11.1 | 9.5% | 2160 | 0.702 | 0.708 |
+| IVF nprobe=3 | 285.8 | 354.9 | 1.6x | 28.2 | 24.2% | 5718 | 0.876 | 0.876 |
+| IVF nprobe=5 | 337.6 | 480.7 | 1.35x | 42.4 | 36.4% | 8773 | 0.952 | 0.952 |
+| IVF nprobe=10 | 426.4 | 638.4 | 1.07x | 66.7 | 57.3% | 13755 | 0.990 | 0.992 |
 
 **Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
 regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the
@@ -202,6 +203,9 @@ A Python `datetime` read from `.snapshots` is converted to your local timezone, 
 **✅ Gold table has only a few large files, so pruning barely skips anything.**
 Setting `write.target-file-size-bytes` alone gave ~780 KB average files against a 256 KB target in the first full run (`cluster_id IN (3 clusters)` could skip only ~42% of files, vs ~70% after the fix). The number of files is governed by the number of write tasks of the sorted write, so `07_gold_write.py` sets `spark.sql.shuffle.partitions` from the estimated size and disables AQE for that write.
 
+**✅ Brute force reports recall@10 below 1.0 against itself (real Olist data only).**
+`review_id` is not unique in the real dataset: 1,603 of the 99,224 review rows share a `review_id` with another row (the pair `review_id` + `order_id` is unique). Comparing top-10 results as sets of `review_id` therefore collapsed duplicates and gave brute force 0.988 against its own ground truth. The benchmark, the Qdrant comparison and the tests now key on `(review_id, order_id)`, and ties are broken by both columns. The synthetic data has unique ids, which is why this only showed up on real data.
+
 **⚠️ Jar / version mismatches.**
 I did not hit one with the pinned set (Spark 3.5.6 / Scala 2.12 / Iceberg 1.9.2 jars / REST fixture 1.9.2). The rules: the runtime jar must match the Spark minor and Scala version (`iceberg-spark-runtime-3.5_2.12`), and keep the client jars and the REST image on the same Iceberg version. `NoSuchMethodError`/`ClassNotFoundException` on startup usually means one of those drifted. Wipe `.ivy2/` to force a re-download.
 
@@ -221,19 +225,19 @@ It is a different kind of system (a purpose-built engine over HTTP vs a Spark jo
 The core pipeline and the tests do not need it.
 
 <!-- BENCH:qdrant:START -->
-35977 vectors, 50 queries, same SQL-style filters (date range + status) applied in both systems, top-10.
+42687 vectors, 50 queries, same SQL-style filters (date range + status) applied in both systems, top-10.
 Ground truth: exact brute force over the Iceberg gold table. Iceberg rows are copied from `ivf_benchmark.json`
 (same run as `09_benchmark.py`); Qdrant ran locally in Docker.
 
 | System | mean ms | p95 ms | recall@10 (by id) | recall@10 (tie-aware) |
 |---|---:|---:|---:|---:|
-| Qdrant HNSW (default) | 2.63 | 4.69 | 0.782 | 1.000 |
-| Qdrant exact | 2.34 | 3.39 | 0.782 | 1.000 |
-| Iceberg brute force (Spark) | 349.7 | 514.3 | 1.000 | 1.000 |
-| Iceberg IVF nprobe=1 (Spark) | 237.1 | 286.5 | 0.786 | 0.808 |
-| Iceberg IVF nprobe=3 (Spark) | 264.6 | 341.1 | 0.936 | 0.966 |
-| Iceberg IVF nprobe=5 (Spark) | 304.1 | 409.6 | 0.948 | 0.970 |
-| Iceberg IVF nprobe=10 (Spark) | 362.9 | 519.7 | 0.986 | 0.996 |
+| Qdrant HNSW (default) | 3.1 | 5.62 | 0.992 | 1.000 |
+| Qdrant exact | 2.59 | 3.32 | 0.992 | 1.000 |
+| Iceberg brute force (Spark) | 456.3 | 707.6 | 1.000 | 1.000 |
+| Iceberg IVF nprobe=1 (Spark) | 254.4 | 336.9 | 0.702 | 0.708 |
+| Iceberg IVF nprobe=3 (Spark) | 285.8 | 354.9 | 0.876 | 0.876 |
+| Iceberg IVF nprobe=5 (Spark) | 337.6 | 480.7 | 0.952 | 0.952 |
+| Iceberg IVF nprobe=10 (Spark) | 426.4 | 638.4 | 0.990 | 0.992 |
 
 Notes
 - Qdrant latency is a client-side HTTP round trip to a purpose-built engine; the Iceberg numbers include a full

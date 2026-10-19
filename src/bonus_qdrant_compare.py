@@ -48,7 +48,7 @@ def main() -> int:
 
     spark = get_spark("bonus_qdrant")
     C = load_centroids(spark)
-    gold = spark.table(T_GOLD).select("review_id", "purchase_ts", "order_status", "embedding").toPandas()
+    gold = spark.table(T_GOLD).select("review_id", "order_id", "purchase_ts", "order_status", "embedding").toPandas()
     n = len(gold)
     log.info("loaded %d vectors from %s", n, T_GOLD)
 
@@ -63,7 +63,7 @@ def main() -> int:
         chunk = gold.iloc[i:i + B]
         client.upsert(COLLECTION, points=[
             models.PointStruct(id=int(i + j), vector=np.asarray(r.embedding, dtype="float32").tolist(),
-                               payload={"review_id": r.review_id, "order_status": r.order_status,
+                               payload={"review_id": r.review_id, "order_id": r.order_id, "order_status": r.order_status,
                                         "purchase_ts": r.purchase_ts.strftime("%Y-%m-%dT%H:%M:%SZ")})
             for j, r in enumerate(chunk.itertuples())], wait=True)
     log.info("[timing] upserted %d points in %.1fs", n, time.perf_counter() - t0)
@@ -84,7 +84,7 @@ def main() -> int:
 
     # Ground truth = our exact brute force through Spark/Iceberg (same filters, same top-10).
     truth = [search(spark, q, mode="brute", top_k=10, **f) for (t, f), q in zip(queries, Q)]
-    truth_ids = [[r.review_id for r in x.rows] for x in truth]
+    truth_ids = [[(r.review_id, r.order_id) for r in x.rows] for x in truth]
     truth_floor = [x.rows[-1].score if x.rows else -1 for x in truth]  # 10th best score
 
     def run_qdrant(exact):
@@ -94,7 +94,7 @@ def main() -> int:
             res = client.query_points(COLLECTION, query=q.tolist(), query_filter=qfilter(f), limit=10,
                                       search_params=models.SearchParams(exact=exact), with_payload=True).points
             lat.append((time.perf_counter() - t1) * 1000)
-            ids = [p.payload["review_id"] for p in res]
+            ids = [(p.payload["review_id"], p.payload["order_id"]) for p in res]
             rec_id.append(len(set(ids) & set(gt)) / len(gt) if gt else 1.0)
             # tie-aware: a result is as good as the truth if its score reaches the truth's 10th-best score
             good = sum(1 for p in res if p.score >= floor - 1e-4)
