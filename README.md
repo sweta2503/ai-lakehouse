@@ -100,17 +100,48 @@ Re-run `make embed-bench` / `make bench` to regenerate on your machine.
 ### Embeddings: naive UDF vs batched `pandas_udf`
 
 <!-- BENCH:headline:START -->
-_Run `make embed-bench`._
+On this machine, batched `pandas_udf` was **2.52x** faster than the naive row-by-row UDF (588 vs 234 rows/s over 20000 rows).
 <!-- BENCH:headline:END -->
 
 <!-- BENCH:embedding:START -->
-_Not generated yet: run `make embed-bench`._
+Model `paraphrase-multilingual-MiniLM-L12-v2` (CPU), 10 Spark cores, 1 torch thread(s) per worker.
+Measured on this machine; the model is already loaded in every worker (warm-up excluded).
+
+| Approach | Rows | Seconds | Rows/sec | Speedup vs naive |
+|---|---:|---:|---:|---:|
+| Naive `udf` (1 row per `encode`) | 20000 | 85.7 | 233 | 1.00x |
+| Batched `pandas_udf` (batch_size=64) | 20000 | 34.0 | 588 | 2.52x |
+| ANTI-PATTERN: load model every row | 100 | 54.6 | 1.83 | n/a (tiny N) |
+
+The anti-pattern row ran on only 100 rows, because it is that slow; compare rows/sec, not seconds.
+Batched vs the anti-pattern: 321.1x in rows/sec.
+Naive and batched vectors agree (min cosine similarity 1.000000 over 200 rows).
 <!-- BENCH:embedding:END -->
 
 ### IVF index vs brute force
 
 <!-- BENCH:ivf:START -->
-_Not generated yet: run `make bench`._
+50 hybrid queries (SQL filters on date/status + vector similarity), top-10; each query/config run
+3x back to back and the median latency kept. Gold table: 35977 rows in
+182 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
+"Data files scanned" and "rows read" come from Iceberg's scan metrics (they already include date-partition pruning,
+which brute force benefits from too).
+
+| Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| brute force | 352.9 | 518.1 | 1.0x | 94.7 | 100.0% | 18921 | 1.000 | 1.000 |
+| IVF nprobe=1 | 231.1 | 284.1 | 1.53x | 9.9 | 10.5% | 2098 | 0.786 | 0.808 |
+| IVF nprobe=3 | 264.4 | 319.6 | 1.33x | 26.4 | 27.9% | 5556 | 0.936 | 0.966 |
+| IVF nprobe=5 | 302.7 | 414.3 | 1.17x | 39.7 | 41.9% | 8250 | 0.948 | 0.970 |
+| IVF nprobe=10 | 364.4 | 504.7 | 0.97x | 58.4 | 61.7% | 12036 | 0.986 | 0.996 |
+
+**Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
+regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the
+savings from scanning fewer files; the files-scanned and rows-read columns show what IVF skips independent of that
+overhead. Latency wins from IVF should grow with table size, but this run does not measure that. The reviews
+(especially synthetic ones) are also much more clusterable than messy real-world text, so recall here may be
+optimistic. "recall@10 tie-aware" counts a result as correct if it scores as high as the exact 10th-best result,
+because many reviews share identical text and therefore identical vectors.
 <!-- BENCH:ivf:END -->
 
 ## Limitations (read these before quoting any number)
@@ -174,7 +205,27 @@ It is a different kind of system (a purpose-built engine over HTTP vs a Spark jo
 The core pipeline and the tests do not need it.
 
 <!-- BENCH:qdrant:START -->
-_Bonus not run yet: `make bonus`._
+35977 vectors, 50 queries, same SQL-style filters (date range + status) applied in both systems, top-10.
+Ground truth: exact brute force over the Iceberg gold table. Iceberg rows are copied from `ivf_benchmark.json`
+(same run as `09_benchmark.py`); Qdrant ran locally in Docker.
+
+| System | mean ms | p95 ms | recall@10 (by id) | recall@10 (tie-aware) |
+|---|---:|---:|---:|---:|
+| Qdrant HNSW (default) | 2.83 | 4.1 | 0.780 | 1.000 |
+| Qdrant exact | 2.4 | 2.69 | 0.780 | 1.000 |
+| Iceberg brute force (Spark) | 352.9 | 518.1 | 1.000 | 1.000 |
+| Iceberg IVF nprobe=1 (Spark) | 231.1 | 284.1 | 0.786 | 0.808 |
+| Iceberg IVF nprobe=3 (Spark) | 264.4 | 319.6 | 0.936 | 0.966 |
+| Iceberg IVF nprobe=5 (Spark) | 302.7 | 414.3 | 0.948 | 0.970 |
+| Iceberg IVF nprobe=10 (Spark) | 364.4 | 504.7 | 0.986 | 0.996 |
+
+Notes
+- Qdrant latency is a client-side HTTP round trip to a purpose-built engine; the Iceberg numbers include a full
+  Spark job per query. Latencies are not comparable as "which index is better", only as "what you pay for
+  keeping vectors inside the lakehouse and querying them with Spark".
+- "By id" recall counts a result only if it is the same review as the ground truth. The data has many identical
+  texts (identical vectors); Qdrant breaks such ties arbitrarily, so the tie-aware column counts a result as correct
+  when its score reaches the ground truth's 10th-best score.
 <!-- BENCH:qdrant:END -->
 
 ## Repository layout
