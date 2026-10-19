@@ -100,7 +100,7 @@ Re-run `make embed-bench` / `make bench` to regenerate on your machine.
 ### Embeddings: naive UDF vs batched `pandas_udf`
 
 <!-- BENCH:headline:START -->
-On this machine, batched `pandas_udf` was **2.52x** faster than the naive row-by-row UDF (588 vs 234 rows/s over 20000 rows).
+On this machine, batched `pandas_udf` was **2.19x** faster than the naive row-by-row UDF (920 vs 419 rows/s over 20000 rows).
 <!-- BENCH:headline:END -->
 
 <!-- BENCH:embedding:START -->
@@ -109,12 +109,12 @@ Measured on this machine; the model is already loaded in every worker (warm-up e
 
 | Approach | Rows | Seconds | Rows/sec | Speedup vs naive |
 |---|---:|---:|---:|---:|
-| Naive `udf` (1 row per `encode`) | 20000 | 85.7 | 233 | 1.00x |
-| Batched `pandas_udf` (batch_size=64) | 20000 | 34.0 | 588 | 2.52x |
-| ANTI-PATTERN: load model every row | 100 | 54.6 | 1.83 | n/a (tiny N) |
+| Naive `udf` (1 row per `encode`) | 20000 | 47.7 | 419 | 1.00x |
+| Batched `pandas_udf` (batch_size=64) | 20000 | 21.7 | 920 | 2.19x |
+| ANTI-PATTERN: load model every row | 100 | 42.4 | 2.36 | n/a (tiny N) |
 
 The anti-pattern row ran on only 100 rows, because it is that slow; compare rows/sec, not seconds.
-Batched vs the anti-pattern: 321.1x in rows/sec.
+Batched vs the anti-pattern: 390.5x in rows/sec.
 Naive and batched vectors agree (min cosine similarity 1.000000 over 200 rows).
 <!-- BENCH:embedding:END -->
 
@@ -129,11 +129,11 @@ which brute force benefits from too).
 
 | Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| brute force | 352.9 | 518.1 | 1.0x | 94.7 | 100.0% | 18921 | 1.000 | 1.000 |
-| IVF nprobe=1 | 231.1 | 284.1 | 1.53x | 9.9 | 10.5% | 2098 | 0.786 | 0.808 |
-| IVF nprobe=3 | 264.4 | 319.6 | 1.33x | 26.4 | 27.9% | 5556 | 0.936 | 0.966 |
-| IVF nprobe=5 | 302.7 | 414.3 | 1.17x | 39.7 | 41.9% | 8250 | 0.948 | 0.970 |
-| IVF nprobe=10 | 364.4 | 504.7 | 0.97x | 58.4 | 61.7% | 12036 | 0.986 | 0.996 |
+| brute force | 335.3 | 482.6 | 1.0x | 94.7 | 100.0% | 18921 | 1.000 | 1.000 |
+| IVF nprobe=1 | 215.5 | 273.8 | 1.56x | 9.9 | 10.5% | 2098 | 0.786 | 0.808 |
+| IVF nprobe=3 | 252.3 | 328.5 | 1.33x | 26.4 | 27.9% | 5556 | 0.936 | 0.966 |
+| IVF nprobe=5 | 284.2 | 374.4 | 1.18x | 39.7 | 41.9% | 8250 | 0.948 | 0.970 |
+| IVF nprobe=10 | 349.9 | 483.4 | 0.96x | 58.4 | 61.7% | 12036 | 0.986 | 0.996 |
 
 **Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
 regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the
@@ -211,13 +211,13 @@ Ground truth: exact brute force over the Iceberg gold table. Iceberg rows are co
 
 | System | mean ms | p95 ms | recall@10 (by id) | recall@10 (tie-aware) |
 |---|---:|---:|---:|---:|
-| Qdrant HNSW (default) | 2.83 | 4.1 | 0.780 | 1.000 |
-| Qdrant exact | 2.4 | 2.69 | 0.780 | 1.000 |
-| Iceberg brute force (Spark) | 352.9 | 518.1 | 1.000 | 1.000 |
-| Iceberg IVF nprobe=1 (Spark) | 231.1 | 284.1 | 0.786 | 0.808 |
-| Iceberg IVF nprobe=3 (Spark) | 264.4 | 319.6 | 0.936 | 0.966 |
-| Iceberg IVF nprobe=5 (Spark) | 302.7 | 414.3 | 0.948 | 0.970 |
-| Iceberg IVF nprobe=10 (Spark) | 364.4 | 504.7 | 0.986 | 0.996 |
+| Qdrant HNSW (default) | 2.56 | 3.53 | 0.784 | 1.000 |
+| Qdrant exact | 2.29 | 2.77 | 0.784 | 1.000 |
+| Iceberg brute force (Spark) | 335.3 | 482.6 | 1.000 | 1.000 |
+| Iceberg IVF nprobe=1 (Spark) | 215.5 | 273.8 | 0.786 | 0.808 |
+| Iceberg IVF nprobe=3 (Spark) | 252.3 | 328.5 | 0.936 | 0.966 |
+| Iceberg IVF nprobe=5 (Spark) | 284.2 | 374.4 | 0.948 | 0.970 |
+| Iceberg IVF nprobe=10 (Spark) | 349.9 | 483.4 | 0.986 | 0.996 |
 
 Notes
 - Qdrant latency is a client-side HTTP round trip to a purpose-built engine; the Iceberg numbers include a full
