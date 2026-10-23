@@ -263,6 +263,11 @@ Benchmarks were measured on the [Brazilian E-Commerce Public Dataset by Olist](h
 (licensed CC BY-NC-SA 4.0, non-commercial). The data is **not** included in this repository (`data/` is gitignored); download it yourself
 from Kaggle. The review text is Portuguese; the multilingual embedding model lets you query in English.
 
+## License
+
+The code in this repository is released under the [MIT License](LICENSE). The Olist dataset is separate and keeps its own
+CC BY-NC-SA 4.0 licence (see above).
+
 ## Repository layout
 
 ```
