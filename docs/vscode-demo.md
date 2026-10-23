@@ -15,6 +15,10 @@ script), shows the result as tables/charts, and ends with what you should see in
    and choose **AI Lakehouse (.venv)**. If it is not listed, run *Developer: Reload Window* or pick *Python Environments...*
    and choose `.venv/bin/python`. Do this once per notebook if VS Code asks again.
 
+Tested in VS Code: the first time, click **Select Kernel** then **Jupyter Kernel...** and pick **AI Lakehouse (.venv) (Python 3.11.x)**
+(marked *Recommended*). For later notebooks VS Code offers that kernel at the top of the list. If you edit `notebooks/_setup.py`,
+click **Restart** in the notebook toolbar so the change is picked up.
+
 Java 17 is found automatically (Homebrew `openjdk@17`); you do not need it on your PATH. Docker Desktop must be running.
 
 ## Order to run the notebooks
