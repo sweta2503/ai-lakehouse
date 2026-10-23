@@ -92,6 +92,11 @@ The query is embedded locally, the nearest `nprobe` centroids are found in Pytho
 **M6 Metadata inspection** (`10_inspect_iceberg_metadata.py`).
 Prints `snapshots`, `history`, `manifests`, `files`, `partitions` for the gold table, then lists the physical objects in MinIO with boto3: the **table metadata JSON** files, the **manifest list** (`snap-*.avro`), the **manifest files** (`*-m0.avro`) and the **Parquet data files**, and decodes the newest metadata JSON (format version, partition spec, sort order, properties).
 
+## Demo in VS Code notebooks
+
+`notebooks/` has one Jupyter notebook per step (00 to 11) so you can demo by clicking Run instead of typing commands. They run the
+same code from `src/` and add no pipeline logic. To use them, run `make notebooks` once (it registers the "AI Lakehouse (.venv)" kernel), open a notebook in VS Code, pick that kernel and run the notebooks in order 00 to 11. `make notebooks-test` executes all of them top to bottom.
+
 ## Optional: English translation of the reviews
 
 Olist reviews are Portuguese. `make translate` (not part of `make all`) translates the distinct review texts with a free local model
@@ -274,6 +279,7 @@ CC BY-NC-SA 4.0 licence (see above).
 docker-compose.yml  .env.example  Makefile  requirements.txt  versions.md
 scripts/   download_data.sh  generate_synthetic_data.py  wait_for_services.sh  render_results.py
 src/       common.py  data_source.py  embeddings.py  search.py  ui_server.py  ui/index.html  01_…10_*.py  bonus_qdrant_compare.py
+notebooks/ 00_…11_*.ipynb (VS Code demo, one per step)  _setup.py
 tests/     test_smoke.py
 benchmarks/  measured results (json + markdown)
 docs/      architecture.md
