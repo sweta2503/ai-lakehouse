@@ -9,3 +9,4 @@ __pycache__/
 .env
 .ivy2/
 .ipynb_checkpoints/
+.DS_Store
