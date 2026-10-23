@@ -9,7 +9,7 @@ SINCE ?= 2018-01-01
 STATUS ?= delivered
 NPROBE ?= 3
 
-.PHONY: help setup up down data bronze drift embed-bench silver translate index gold query bench inspect results ui bonus test smoke all clean
+.PHONY: help setup up down data bronze drift embed-bench silver translate index gold query bench inspect results ui notebooks notebooks-test bonus test smoke all clean
 
 help:
 	@grep -E '^[a-z-]+:' Makefile | grep -v '^\.PHONY' | cut -d: -f1 | tr '\n' ' '; echo
@@ -46,6 +46,23 @@ bench: ; $(PY) src/09_benchmark.py
 inspect: ; $(PY) src/10_inspect_iceberg_metadata.py
 ui:  ## search UI at http://localhost:8765 (needs `make up` + a built gold table)
 	$(PY) src/ui_server.py
+
+notebooks:  ## register the .venv Jupyter kernel for the VS Code demo notebooks (see docs/vscode-demo.md)
+ifdef UV
+	$(UV) pip install --python $(PY) -r requirements.txt
+else
+	$(PY) -m pip install -r requirements.txt
+endif
+	$(PY) -m ipykernel install --user --name ai-lakehouse --display-name "AI Lakehouse (.venv)"
+	@echo "Open notebooks/00_start_services.ipynb in VS Code and pick the kernel 'AI Lakehouse (.venv)'"
+
+notebooks-test:  ## execute every notebook top to bottom (outputs go to /tmp, repo notebooks stay clean). Use SAMPLE_ROWS=5000 for a fast pass
+	@mkdir -p /tmp/ai-lakehouse-nb-out
+	@for nb in notebooks/[0-9]*.ipynb; do \
+	  echo "== $$nb"; \
+	  .venv/bin/jupyter nbconvert --to notebook --execute --ExecutePreprocessor.kernel_name=ai-lakehouse \
+	    --ExecutePreprocessor.timeout=3600 --output-dir /tmp/ai-lakehouse-nb-out $$nb || exit 1; \
+	done
 
 results: ; $(PY) scripts/render_results.py   ## copy benchmarks/ into README
 
