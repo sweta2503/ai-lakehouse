@@ -257,6 +257,12 @@ Notes
   when its score reaches the ground truth's 10th-best score.
 <!-- BENCH:qdrant:END -->
 
+## Data and attribution
+
+Benchmarks were measured on the [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+(licensed CC BY-NC-SA 4.0, non-commercial). The data is **not** included in this repository (`data/` is gitignored); download it yourself
+from Kaggle. The review text is Portuguese; the multilingual embedding model lets you query in English.
+
 ## Repository layout
 
 ```
