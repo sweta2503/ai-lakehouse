@@ -19,7 +19,7 @@ from pyspark.sql import functions as F
 
 import time
 
-from common import T_CENTROIDS, T_GOLD
+from common import T_CENTROIDS, T_GOLD, T_TRANS
 
 METRIC_KEYS = ["resultDataFiles", "skippedDataFiles", "totalDataManifests", "scannedDataManifests",
                "skippedDataManifests", "totalFileSize", "numOutputRows", "totalPlanningDuration"]
@@ -45,6 +45,19 @@ def nearest_clusters(q: np.ndarray, C: np.ndarray, nprobe: int) -> list[int]:
     """Centroids are unit-norm and so is q: dot product == cosine similarity."""
     sims = C @ q
     return [int(i) for i in np.argsort(-sims)[:nprobe]]
+
+
+def translations(spark, texts) -> dict:
+    """review_text -> English text for the given texts (display only; empty dict if no translation table).
+
+    Kept outside the gold table on purpose: the index and embeddings use the ORIGINAL text, and a lookup of
+    at most top-k strings does not touch the search benchmark.
+    """
+    texts = sorted(set(texts))
+    if not texts or not spark.catalog.tableExists(T_TRANS):
+        return {}
+    rows = spark.table(T_TRANS).where(F.col("review_text").isin(*texts)).collect()
+    return {r.review_text: r.review_text_en for r in rows}
 
 
 def scan_metrics(df) -> dict:

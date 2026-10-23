@@ -13,7 +13,7 @@ from pathlib import Path
 
 from common import T_GOLD, get_logger, get_spark
 from embeddings import encode_texts
-from search import load_centroids, search
+from search import load_centroids, search, translations
 
 log = get_logger("ui")
 PAGE = (Path(__file__).parent / "ui" / "index.html").read_bytes()
@@ -37,7 +37,7 @@ def init():
     log.info("ready")
 
 
-def pack(res, total_files):
+def pack(res, total_files, tr):
     m = res.metrics
     return {
         "mode": res.mode, "clusters": res.clusters, "latency_ms": round(res.seconds * 1000),
@@ -45,7 +45,7 @@ def pack(res, total_files):
         "rows_read": m.get("numOutputRows"),
         "rows": [{"review_id": r.review_id, "score": round(r.score, 4), "cluster": r.cluster_id,
                   "date": r.purchase_ts.strftime("%Y-%m-%d"), "status": r.order_status,
-                  "stars": r.review_score, "text": r.review_text} for r in res.rows],
+                  "stars": r.review_score, "text": r.review_text, "text_en": tr.get(r.review_text)} for r in res.rows],
     }
 
 
@@ -64,16 +64,17 @@ def do_search(p):
         if p.get("compare"):
             b = search(spark, q, mode="brute", **kw)
             i = search(spark, q, mode="ivf", C=C, nprobe=nprobe, **kw)
-            truth = [r.review_id for r in b.rows]
-            got = {r.review_id for r in i.rows}
+            tr = translations(spark, [r.review_text for r in b.rows + i.rows])
+            truth = [(r.review_id, r.order_id) for r in b.rows]
+            got = {(r.review_id, r.order_id) for r in i.rows}
             floor = b.rows[-1].score if b.rows else float("-inf")
             tie = sum(1 for r in i.rows if r.score >= floor - 1e-4)
             n = len(truth) or 1
-            out.update(brute=pack(b, STATE["total_files"]), ivf=pack(i, STATE["total_files"]),
+            out.update(brute=pack(b, STATE["total_files"], tr), ivf=pack(i, STATE["total_files"], tr),
                        recall=round(len(got & set(truth)) / n, 3), recall_tie=round(min(tie, n) / n, 3))
         else:
             r = search(spark, q, mode=p.get("mode", "ivf"), C=C, nprobe=nprobe, **kw)
-            out["result"] = pack(r, STATE["total_files"])
+            out["result"] = pack(r, STATE["total_files"], translations(spark, [x.review_text for x in r.rows]))
     return out
 
 

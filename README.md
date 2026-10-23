@@ -92,6 +92,15 @@ The query is embedded locally, the nearest `nprobe` centroids are found in Pytho
 **M6 Metadata inspection** (`10_inspect_iceberg_metadata.py`).
 Prints `snapshots`, `history`, `manifests`, `files`, `partitions` for the gold table, then lists the physical objects in MinIO with boto3: the **table metadata JSON** files, the **manifest list** (`snap-*.avro`), the **manifest files** (`*-m0.avro`) and the **Parquet data files**, and decodes the newest metadata JSON (format version, partition spec, sort order, properties).
 
+## Optional: English translation of the reviews
+
+Olist reviews are Portuguese. `make translate` (not part of `make all`) translates the distinct review texts with a free local model
+(`Helsinki-NLP/opus-mt-ROMANCE-en`) into `lake.silver.review_translations`, a lookup table used **only for display**: the UI and
+`make query` then show an English line under each Portuguese result. Embeddings, the index and all benchmarks use the original
+text and are unaffected, and everything works without it. It is slow on a laptop (each Spark worker holds its own model copy;
+on a memory-starved machine I measured about 15 texts/s on 4 workers, so tens of minutes for ~37k texts) and machine translation
+of short slangy reviews is imperfect. Tune with `TRANSLATE_CORES`.
+
 ## Search UI (for demos)
 
 ```bash
