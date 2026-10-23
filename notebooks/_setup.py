@@ -60,15 +60,18 @@ def active_spark():
 def _quiet_jvm():
     """Hide the JVM's startup banner (Ivy resolution, hostname warnings) that would otherwise show as red stderr in
     every notebook. The JVM is launched once per kernel, so this only matters around the first Spark start."""
+    sys.stdout.flush()
     sys.stderr.flush()
-    saved, devnull = os.dup(2), os.open(os.devnull, os.O_WRONLY)
+    saved1, saved2, devnull = os.dup(1), os.dup(2), os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 1)  # Ivy prints one line to stdout, the rest to stderr
     os.dup2(devnull, 2)
     try:
         yield
     finally:
-        os.dup2(saved, 2)
-        os.close(saved)
-        os.close(devnull)
+        os.dup2(saved1, 1)
+        os.dup2(saved2, 2)
+        for fd in (saved1, saved2, devnull):
+            os.close(fd)
 
 
 def get_spark(app="notebook"):
@@ -137,9 +140,14 @@ def sql(spark, query):
 
 
 def side_by_side(dfs, titles):
-    cells = "".join(f"<div style='flex:1;min-width:0;overflow:auto'><h4 style='margin:4px 0'>{t}</h4>{d.to_html(index=False, escape=True)}</div>"
+    """Show tables next to each other when the pane is wide, stacked when it is narrow (e.g. a VS Code notebook).
+    Long text columns (7th onward: the review and its English translation) get a readable width."""
+    css = ("<style>.sbs{display:flex;flex-wrap:wrap;gap:18px}.sbs>div{flex:1 1 560px;min-width:0;overflow-x:auto}"
+           ".sbs table{border-collapse:collapse}.sbs td,.sbs th{white-space:nowrap;padding:3px 8px;text-align:left;vertical-align:top}"
+           ".sbs td:nth-child(n+7),.sbs th:nth-child(n+7){white-space:normal;min-width:260px;max-width:420px}</style>")
+    cells = "".join(f"<div><h4 style='margin:4px 0'>{t}</h4>{d.to_html(index=False, escape=True)}</div>"
                     for d, t in zip(dfs, titles))
-    display(HTML(f"<div style='display:flex;gap:18px'>{cells}</div>"))
+    display(HTML(f"{css}<div class='sbs'>{cells}</div>"))
 
 
 def minio():
