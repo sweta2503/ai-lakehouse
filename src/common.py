@@ -54,6 +54,7 @@ WAREHOUSE_BUCKET = env("WAREHOUSE_BUCKET", "warehouse")
 EMBEDDING_MODEL = env("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
 EMBEDDING_DIM = env_int("EMBEDDING_DIM", 384)
 EMBED_BATCH_SIZE = env_int("EMBED_BATCH_SIZE", 64)
+TRANSLATE_MODEL = env("TRANSLATE_MODEL", "Helsinki-NLP/opus-mt-ROMANCE-en")
 IVF_K = env_int("IVF_K", 50)
 IVF_SEED = env_int("IVF_SEED", 42)
 TARGET_FILE_SIZE_BYTES = env_int("TARGET_FILE_SIZE_BYTES", 262144)
@@ -68,6 +69,7 @@ T_BRONZE = f"{CATALOG}.bronze.reviews"
 T_SILVER = f"{CATALOG}.silver.review_embeddings"
 T_CENTROIDS = f"{CATALOG}.gold.centroids"
 T_GOLD = f"{CATALOG}.gold.review_embeddings"
+T_TRANS = f"{CATALOG}.silver.review_translations"  # review_text -> review_text_en (display only)
 
 
 def get_logger(name: str) -> logging.Logger:

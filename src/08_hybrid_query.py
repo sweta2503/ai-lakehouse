@@ -11,7 +11,7 @@ import time
 
 from common import T_GOLD, get_logger, get_spark, section, timed
 from embeddings import encode_texts
-from search import explain_text, load_centroids, nearest_clusters, search
+from search import explain_text, load_centroids, nearest_clusters, search, translations
 
 log = get_logger("query")
 
@@ -45,9 +45,12 @@ def main() -> int:
     print(f"\nfilters: since={a.since} until={a.until} status={a.status}" +
           (f" cluster_id IN {r.clusters}" if r.clusters else "  (no cluster restriction)"))
     print(f"\nTop {a.top_k} for: \"{a.query}\"")
+    tr = translations(spark, [row.review_text for row in r.rows])
     for i, row in enumerate(r.rows, 1):
         print(f"{i:>2}. score={row.score:.3f} cluster={row.cluster_id:<2} {row.purchase_ts:%Y-%m-%d} "
               f"{row.order_status:<9} stars={row.review_score}  {row.review_text[:90]}")
+        if tr.get(row.review_text):
+            print(f"{'':>6}EN: {tr[row.review_text][:100]}")
 
     total_files = spark.sql(f"SELECT count(*) n FROM {T_GOLD}.files").first().n
     m = r.metrics

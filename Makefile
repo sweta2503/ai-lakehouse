@@ -9,7 +9,7 @@ SINCE ?= 2018-01-01
 STATUS ?= delivered
 NPROBE ?= 3
 
-.PHONY: help setup up down data bronze drift embed-bench silver index gold query bench inspect results ui bonus test smoke all clean
+.PHONY: help setup up down data bronze drift embed-bench silver translate index gold query bench inspect results ui bonus test smoke all clean
 
 help:
 	@grep -E '^[a-z-]+:' Makefile | grep -v '^\.PHONY' | cut -d: -f1 | tr '\n' ' '; echo
@@ -38,6 +38,7 @@ bronze: ; $(PY) src/02_bronze_ingest.py
 drift: ; $(PY) src/03_schema_drift.py
 embed-bench: ; $(PY) src/04_embed_naive_vs_batched.py
 silver: ; $(PY) src/05_silver_embeddings.py
+translate: ; $(PY) src/05b_translate_reviews.py   ## OPTIONAL: English display text (free local model, slow: ~tens of minutes on a laptop)
 index: ; $(PY) src/06_build_ivf_index.py
 gold: ; $(PY) src/07_gold_write.py
 query: ; $(PY) src/08_hybrid_query.py --query "$(Q)" --since $(SINCE) --status $(STATUS) --nprobe $(NPROBE) --mode ivf

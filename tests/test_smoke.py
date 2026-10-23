@@ -3,9 +3,9 @@ check: `make smoke`, which uses SAMPLE_ROWS=5000). Needs MinIO + the REST catalo
 import numpy as np
 import pytest
 
-from common import EMBEDDING_DIM, T_BRONZE, T_CENTROIDS, T_GOLD, T_SILVER, get_spark
+from common import EMBEDDING_DIM, T_BRONZE, T_CENTROIDS, T_GOLD, T_SILVER, T_TRANS, get_spark
 from embeddings import encode_texts
-from search import load_centroids, nearest_clusters, search
+from search import load_centroids, nearest_clusters, search, translations
 
 
 @pytest.fixture(scope="session")
@@ -103,3 +103,21 @@ def test_nearest_clusters_returns_nprobe_distinct(C):
     q = encode_texts(["anything"])[0]
     near = nearest_clusters(q, C, 5)
     assert len(set(near)) == 5
+
+
+def test_english_translations_cover_every_silver_text(spark):
+    if not spark.catalog.tableExists(T_TRANS):
+        pytest.skip("optional translation table not built (make translate)")
+    missing = (spark.table(T_SILVER).select("review_text").distinct()
+               .join(spark.table(T_TRANS), "review_text", "left_anti").count())
+    assert missing == 0
+    assert spark.table(T_TRANS).where("review_text_en IS NULL OR trim(review_text_en) = ''").count() == 0
+
+
+def test_translation_lookup_returns_english_for_results(spark, C):
+    if not spark.catalog.tableExists(T_TRANS):
+        pytest.skip("optional translation table not built (make translate)")
+    q = encode_texts(["delivery took too long"])[0]
+    r = search(spark, q, mode="brute", top_k=5)
+    tr = translations(spark, [x.review_text for x in r.rows])
+    assert set(tr) == {x.review_text for x in r.rows}
