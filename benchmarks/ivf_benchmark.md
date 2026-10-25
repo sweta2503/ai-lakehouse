@@ -2,17 +2,17 @@
 
 50 hybrid queries (SQL filters on date/status + vector similarity), top-10; each query/config run
 3x back to back and the median latency kept. Gold table: 42687 rows in
-221 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
+224 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
 "Data files scanned" and "rows read" come from Iceberg's scan metrics (they already include date-partition pruning,
 which brute force benefits from too).
 
 | Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| brute force | 456.3 | 707.6 | 1.0x | 116.4 | 100.0% | 22643 | 1.000 | 1.000 |
-| IVF nprobe=1 | 254.4 | 336.9 | 1.79x | 11.1 | 9.5% | 2160 | 0.702 | 0.708 |
-| IVF nprobe=3 | 285.8 | 354.9 | 1.6x | 28.2 | 24.2% | 5718 | 0.876 | 0.876 |
-| IVF nprobe=5 | 337.6 | 480.7 | 1.35x | 42.4 | 36.4% | 8773 | 0.952 | 0.952 |
-| IVF nprobe=10 | 426.4 | 638.4 | 1.07x | 66.7 | 57.3% | 13755 | 0.990 | 0.992 |
+| brute force | 487.4 | 750.1 | 1.0x | 117.6 | 100.0% | 22643 | 1.000 | 1.000 |
+| IVF nprobe=1 | 272.9 | 342.4 | 1.79x | 11.2 | 9.5% | 2118 | 0.638 | 0.644 |
+| IVF nprobe=3 | 311.6 | 414.9 | 1.56x | 27.3 | 23.2% | 5442 | 0.860 | 0.864 |
+| IVF nprobe=5 | 354.6 | 501.3 | 1.37x | 40.8 | 34.7% | 8329 | 0.904 | 0.908 |
+| IVF nprobe=10 | 460.4 | 669.2 | 1.06x | 67.3 | 57.2% | 13647 | 0.954 | 0.958 |
 
 **Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
 regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the

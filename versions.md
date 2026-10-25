@@ -13,6 +13,7 @@ Single source of truth for the Iceberg version is `ICEBERG_VERSION` in `.env` / 
 | MinIO | `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` | community fork; official `minio/minio` images are gone, and the frozen `bitnamilegacy/minio` build has no web console |
 | MinIO client | `bitnamilegacy/minio-client:2025.4.16` | one-shot bucket creation |
 | Qdrant (bonus) | `qdrant/qdrant:v1.14.1` | |
-| sentence-transformers | 3.4.1 | model: `paraphrase-multilingual-MiniLM-L12-v2` (384 dims) |
+| sentence-transformers | 3.4.1 | model: `all-MiniLM-L6-v2` (384 dims, English) |
 | torch / transformers | 2.6.0 / 4.49.0 | CPU only |
+| CTranslate2 | 4.5.0 | runs the Portuguese->English model (`unicamp-dl/translation-pt-en-t5`, int8); 4.5.0 because newer converters need a newer `transformers` |
 | numpy / pandas / pyarrow | 1.26.4 / 2.2.3 / 17.0.0 | numpy<2 for PySpark 3.5 compatibility |

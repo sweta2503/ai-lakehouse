@@ -54,7 +54,7 @@ h3{margin:0 0 8px;font-size:15px}.tag{font-size:11px;border-radius:5px;padding:1
 </div>
 <script>
 const $=id=>document.getElementById(id);
-const EX=["package arrived damaged","delivery took forever","excellent quality, very happy","I want a refund","the seller never answered","chegou atrasado","wrong item sent"];
+const EX=["package arrived damaged","delivery took forever","excellent quality, very happy","I want a refund","the seller never answered","wrong item sent"];
 let meta=null;
 EX.forEach(t=>{const b=document.createElement('button');b.className='chip';b.textContent=t;b.onclick=()=>{$('q').value=t;run(false)};$('chips').appendChild(b)});
 $('np').oninput=()=>$('npv').textContent=$('np').value;
@@ -65,7 +65,7 @@ fetch('/api/meta').then(r=>r.json()).then(m=>{meta=m;
   $('np').max=m.k;$('sparkui').href=m.spark_ui||'http://localhost:4040';
   m.statuses.forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;$('status').appendChild(o)});
   $('since').min=$('until').min=m.lo;$('since').max=$('until').max=m.hi;
-  $('foot').textContent=`Data range ${m.lo} to ${m.hi}. Scores are cosine similarity. English lines are machine translations (local Marian model) of the original reviews. Files scanned comes from Iceberg's own scan metrics.`});
+  $('foot').textContent=`Data range ${m.lo} to ${m.hi}. Scores are cosine similarity. With the Olist data, review text is a machine translation (Portuguese to English) of the original reviews. Files scanned comes from Iceberg's own scan metrics.`});
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 function stat(v,l,extra=''){return `<div class="stat"><b>${v}</b><span>${l}</span>${extra}</div>`}
 function statsHtml(r){const pct=r.files_total?100*r.files_scanned/r.files_total:0;
@@ -73,7 +73,7 @@ function statsHtml(r){const pct=r.files_total?100*r.files_scanned/r.files_total:
 function clusterMap(sims,r){const probe=new Set(r.clusters||[]),hit=new Set(r.rows.map(x=>x.cluster));
   return `<div class="clusters">${sims.map((s,i)=>`<div class="cl ${probe.has(i)?'probe':''} ${hit.has(i)?'hit':''}" title="cluster ${i}: cos ${s}">${i}</div>`).join('')}</div>
   <div class="legend"><span class="dot" style="background:var(--probe)"></span>probed by IVF<span class="dot" style="outline:2px solid var(--hit)"></span>contains a result</div>`}
-function results(r,floor){return r.rows.length?r.rows.map((x,i)=>`<div class="res ${floor!==undefined&&x.score<floor-1e-4?'miss':''}"><div class="sc">${x.score.toFixed(3)}<div class="meta">#${i+1}</div></div><div>${x.text_en?`${esc(x.text_en)}<div class="orig">${esc(x.text)}</div>`:esc(x.text)}<div class="meta">${x.date} · ${x.status} · ${'★'.repeat(x.stars)} · cluster ${x.cluster}</div></div></div>`).join(''):'<p class="note">No rows match these filters.</p>'}
+function results(r,floor){return r.rows.length?r.rows.map((x,i)=>`<div class="res ${floor!==undefined&&x.score<floor-1e-4?'miss':''}"><div class="sc">${x.score.toFixed(3)}<div class="meta">#${i+1}</div></div><div>${esc(x.text)}<div class="meta">${x.date} · ${x.status} · ${'★'.repeat(x.stars)} · cluster ${x.cluster}</div></div></div>`).join(''):'<p class="note">No rows match these filters.</p>'}
 async function run(compare){const query=$('q').value.trim();if(!query)return $('q').focus();
   $('go').disabled=$('cmp').disabled=true;$('out').innerHTML='<div class="card note">Searching…</div>';
   const body={query,compare,mode:document.querySelector('[name=mode]:checked').value,nprobe:$('np').value,since:$('since').value,until:$('until').value,status:$('status').value,top_k:$('k').value};

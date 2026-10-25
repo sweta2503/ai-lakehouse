@@ -18,15 +18,15 @@ log = get_logger("bench")
 TOP_K = 10
 NPROBES = [1, 3, 5, 10]
 
-# 25 phrasings (English paraphrases, a few Portuguese, a few off-theme) x 2 filter sets = 50 queries.
+# 25 phrasings (paraphrases of common review themes, a few off-theme) x 2 filter sets = 50 queries.
 TEXTS = [
     "package arrived damaged", "the box was crushed and the item was broken", "delivery took forever",
     "my order is late and nobody tells me where it is", "excellent product, very happy", "great build quality",
     "I received the wrong product", "they sent a different color than I ordered", "I want a refund",
     "money back please, the return was approved long ago", "super fast shipping", "arrived earlier than expected",
     "the seller never answered my messages", "customer support was really helpful", "cheap and poor quality, fell apart",
-    "good value for money", "one item was missing from the order", "chegou atrasado e sem rastreio",
-    "produto veio quebrado", "ótima qualidade, recomendo", "wanted to cancel the order and get reimbursed",
+    "good value for money", "one item was missing from the order", "it arrived late and there was no tracking",
+    "the product came broken", "great quality, I recommend it", "wanted to cancel the order and get reimbursed",
     "the item does not look like the photos", "perfect gift, my kid loved it", "packaging was wet and torn",
     "would buy again",
 ]

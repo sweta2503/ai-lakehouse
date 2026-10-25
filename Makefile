@@ -38,7 +38,7 @@ bronze: ; $(PY) src/02_bronze_ingest.py
 drift: ; $(PY) src/03_schema_drift.py
 embed-bench: ; $(PY) src/04_embed_naive_vs_batched.py
 silver: ; $(PY) src/05_silver_embeddings.py
-translate: ; $(PY) src/05b_translate_reviews.py   ## OPTIONAL: English display text (free local model, slow: ~tens of minutes on a laptop)
+translate: ; $(PY) src/01b_translate_dataset.py   ## Olist only: make the reviews English (free local model, ~30-40 min once, resumable)
 index: ; $(PY) src/06_build_ivf_index.py
 gold: ; $(PY) src/07_gold_write.py
 query: ; $(PY) src/08_hybrid_query.py --query "$(Q)" --since $(SINCE) --status $(STATUS) --nprobe $(NPROBE) --mode ivf
@@ -81,11 +81,11 @@ test: ; $(PY) -m pytest -v tests
 # Fast end-to-end check on 5,000 rows (skips the slow embedding benchmark), then the tests.
 # WARNING: rebuilds bronze/silver/gold, replacing a full-size lakehouse.
 smoke:
-	SAMPLE_ROWS=5000 $(MAKE) data bronze drift silver index gold test
+	SAMPLE_ROWS=5000 $(MAKE) data translate bronze drift silver index gold test
 
 # Core flow. (bronze already ingests; drift appends a second batch afterwards.)
-all: data bronze drift embed-bench silver index gold query bench inspect results
+all: data translate bronze drift embed-bench silver index gold query bench inspect results
 
 clean:  ## remove local state (keeps .venv and .ivy2 jar cache)
 	docker compose --profile bonus down -v
-	rm -rf spark-warehouse metastore_db derby.log benchmarks/*.json benchmarks/*.md data/synthetic data/landing
+	rm -rf spark-warehouse metastore_db derby.log benchmarks/*.json benchmarks/*.md data/synthetic data/landing   # keeps data/english (the 30-min translation)

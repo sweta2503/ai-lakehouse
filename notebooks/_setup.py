@@ -34,8 +34,7 @@ pd.set_option("display.max_colwidth", 100)
 pd.set_option("display.width", 220)
 pd.set_option("display.max_columns", 30)
 
-T_BRONZE, T_SILVER, T_CENTROIDS, T_GOLD, T_TRANS = (common.T_BRONZE, common.T_SILVER, common.T_CENTROIDS,
-                                                    common.T_GOLD, common.T_TRANS)
+T_BRONZE, T_SILVER, T_CENTROIDS, T_GOLD = common.T_BRONZE, common.T_SILVER, common.T_CENTROIDS, common.T_GOLD
 BENCH_DIR = common.BENCH_DIR
 MINIO_CONSOLE = "http://localhost:9001"
 
@@ -141,7 +140,7 @@ def sql(spark, query):
 
 def side_by_side(dfs, titles):
     """Show tables next to each other when the pane is wide, stacked when it is narrow (e.g. a VS Code notebook).
-    Long text columns (7th onward: the review and its English translation) get a readable width."""
+    Long text columns (7th onward: the review text) get a readable width."""
     css = ("<style>.sbs{display:flex;flex-wrap:wrap;gap:18px}.sbs>div{flex:1 1 560px;min-width:0;overflow-x:auto}"
            ".sbs table{border-collapse:collapse}.sbs td,.sbs th{white-space:nowrap;padding:3px 8px;text-align:left;vertical-align:top}"
            ".sbs td:nth-child(n+7),.sbs th:nth-child(n+7){white-space:normal;min-width:260px;max-width:420px}</style>")

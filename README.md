@@ -56,7 +56,7 @@ Every script in `src/` also runs on its own and prints what it is doing and how 
 Kaggle needs a login, so nothing is downloaded automatically without credentials. `make data` runs `scripts/download_data.sh`:
 with the `kaggle` CLI and credentials it downloads the dataset; otherwise it prints manual instructions and generates the synthetic data.
 To use the real data: download [Olist Brazilian E-Commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) and put
-`olist_orders_dataset.csv` and `olist_order_reviews_dataset.csv` in `data/`. Reviews are in Portuguese; the multilingual model also lets you query in English.
+`olist_orders_dataset.csv` and `olist_order_reviews_dataset.csv` in `data/`. Reviews are in Portuguese, so `make translate` turns them into English first (see below).
 
 The synthetic generator (`scripts/generate_synthetic_data.py`) produces the same columns with English themed reviews
 (late delivery, damaged packaging, great quality, wrong item, refund requests, …), ~50k rows. **It is fake data**, and
@@ -97,14 +97,18 @@ Prints `snapshots`, `history`, `manifests`, `files`, `partitions` for the gold t
 `notebooks/` has one Jupyter notebook per step (00 to 11) so you can demo by clicking Run instead of typing commands. They run the
 same code from `src/` and add no pipeline logic. To use them, run `make notebooks` once (it registers the "AI Lakehouse (.venv)" kernel), open a notebook in VS Code, pick that kernel and run the notebooks in order 00 to 11. `make notebooks-test` executes all of them top to bottom.
 
-## Optional: English translation of the reviews
+## The dataset is translated to English
 
-Olist reviews are Portuguese. `make translate` (not part of `make all`) translates the distinct review texts with a free local model
-(`Helsinki-NLP/opus-mt-ROMANCE-en`) into `lake.silver.review_translations`, a lookup table used **only for display**: the UI and
-`make query` then show an English line under each Portuguese result. Embeddings, the index and all benchmarks use the original
-text and are unaffected, and everything works without it. It is slow on a laptop (each Spark worker holds its own model copy;
-on a memory-starved machine I measured about 15 texts/s on 4 workers, so tens of minutes for ~37k texts) and machine translation
-of short slangy reviews is imperfect. Tune with `TRANSLATE_CORES`.
+Olist reviews are Portuguese. `make translate` (step 1b, part of `make all`) translates every distinct title and message once with a
+free local model (`unicamp-dl/translation-pt-en-t5` on CTranslate2 int8, CPU) and writes `data/english/olist_order_reviews_dataset.csv`.
+From then on Bronze, Silver, Gold, the embeddings, search, the UI and the benchmark all work on **English text**; the Portuguese
+originals stay in the `_pt` columns of that CSV. It takes roughly 30 to 40 minutes the first time and is resumable (a cache file
+records finished translations), so you can stop and re-run it. `make clean` keeps `data/english/`.
+
+It is machine translation of short, slangy, misspelled reviews: most come out fine, some come out odd. For semantic search that is
+acceptable because the embedding model captures overall meaning, but no single translated sentence should be treated as exact.
+We compared four free models on real reviews and wrote down what we saw in [`docs/translation.md`](docs/translation.md).
+The synthetic fallback data is already English, so `make translate` does nothing for it.
 
 ## Search UI (for demos)
 
@@ -128,21 +132,21 @@ The committed results were measured on the **real Olist dataset** (log line `DAT
 ### Embeddings: naive UDF vs batched `pandas_udf`
 
 <!-- BENCH:headline:START -->
-On this machine, batched `pandas_udf` was **2.11x** faster than the naive row-by-row UDF (929 vs 441 rows/s over 20000 rows).
+On this machine, batched `pandas_udf` was **2.38x** faster than the naive row-by-row UDF (1047 vs 440 rows/s over 20000 rows).
 <!-- BENCH:headline:END -->
 
 <!-- BENCH:embedding:START -->
-Model `paraphrase-multilingual-MiniLM-L12-v2` (CPU), 10 Spark cores, 1 torch thread(s) per worker.
+Model `all-MiniLM-L6-v2` (CPU), 10 Spark cores, 1 torch thread(s) per worker.
 Measured on this machine; the model is already loaded in every worker (warm-up excluded).
 
 | Approach | Rows | Seconds | Rows/sec | Speedup vs naive |
 |---|---:|---:|---:|---:|
-| Naive `udf` (1 row per `encode`) | 20000 | 45.4 | 441 | 1.00x |
-| Batched `pandas_udf` (batch_size=64) | 20000 | 21.5 | 929 | 2.11x |
-| ANTI-PATTERN: load model every row | 100 | 50.0 | 2.00 | n/a (tiny N) |
+| Naive `udf` (1 row per `encode`) | 20000 | 45.4 | 440 | 1.00x |
+| Batched `pandas_udf` (batch_size=64) | 20000 | 19.1 | 1047 | 2.38x |
+| ANTI-PATTERN: load model every row | 100 | 27.9 | 3.58 | n/a (tiny N) |
 
 The anti-pattern row ran on only 100 rows, because it is that slow; compare rows/sec, not seconds.
-Batched vs the anti-pattern: 464.0x in rows/sec.
+Batched vs the anti-pattern: 292.5x in rows/sec.
 Naive and batched vectors agree (min cosine similarity 1.000000 over 200 rows).
 <!-- BENCH:embedding:END -->
 
@@ -151,17 +155,17 @@ Naive and batched vectors agree (min cosine similarity 1.000000 over 200 rows).
 <!-- BENCH:ivf:START -->
 50 hybrid queries (SQL filters on date/status + vector similarity), top-10; each query/config run
 3x back to back and the median latency kept. Gold table: 42687 rows in
-221 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
+224 data files, k=50 clusters. Recall@10 is measured against exact brute force with the same filters.
 "Data files scanned" and "rows read" come from Iceberg's scan metrics (they already include date-partition pruning,
 which brute force benefits from too).
 
 | Config | mean ms | p95 ms | speedup | data files scanned | % of brute files | rows read | recall@10 | recall@10 tie-aware |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| brute force | 456.3 | 707.6 | 1.0x | 116.4 | 100.0% | 22643 | 1.000 | 1.000 |
-| IVF nprobe=1 | 254.4 | 336.9 | 1.79x | 11.1 | 9.5% | 2160 | 0.702 | 0.708 |
-| IVF nprobe=3 | 285.8 | 354.9 | 1.6x | 28.2 | 24.2% | 5718 | 0.876 | 0.876 |
-| IVF nprobe=5 | 337.6 | 480.7 | 1.35x | 42.4 | 36.4% | 8773 | 0.952 | 0.952 |
-| IVF nprobe=10 | 426.4 | 638.4 | 1.07x | 66.7 | 57.3% | 13755 | 0.990 | 0.992 |
+| brute force | 487.4 | 750.1 | 1.0x | 117.6 | 100.0% | 22643 | 1.000 | 1.000 |
+| IVF nprobe=1 | 272.9 | 342.4 | 1.79x | 11.2 | 9.5% | 2118 | 0.638 | 0.644 |
+| IVF nprobe=3 | 311.6 | 414.9 | 1.56x | 27.3 | 23.2% | 5442 | 0.860 | 0.864 |
+| IVF nprobe=5 | 354.6 | 501.3 | 1.37x | 40.8 | 34.7% | 8329 | 0.904 | 0.908 |
+| IVF nprobe=10 | 460.4 | 669.2 | 1.06x | 67.3 | 57.2% | 13647 | 0.954 | 0.958 |
 
 **Scale caveat:** this is a laptop-sized table. Every query pays a fixed Spark job + Iceberg planning cost
 regardless of how many vectors it scores, so on a table this small that overhead can hide (or even outweigh) the
@@ -180,7 +184,7 @@ because many reviews share identical text and therefore identical vectors.
 - **Demo-scale tuning.** To make file-level pruning visible on small data, the gold write sets a small target file size, sizes the number of write tasks to produce ~256 KB files, and sets small read-split sizes on the table (applied identically to brute force and IVF). At real scale you would leave Iceberg's defaults (hundreds of MB per file) and get the same effect with more rows.
 - **Not a vector database.** No ANN graph, no incremental index maintenance: new data gets a `cluster_id` against existing centroids; if the data drifts you must retrain the centroids and rewrite. Appends also fragment cluster ranges until you compact (see M4).
 - **Filters and pruning.** Only `cluster_id` and `purchase_ts` (month partitions) prune well. `order_status` has very few distinct values spread across all files and will not skip files.
-- **Quality of the embedding model** (`paraphrase-multilingual-MiniLM-L12-v2`, 384-d) limits search quality regardless of the index.
+- **Quality of the embedding model** (`all-MiniLM-L6-v2`, 384-d) limits search quality regardless of the index.
 - The REST catalog image is the Iceberg **test fixture**; fine for a demo, not a production catalog.
 
 ## Troubleshooting
@@ -245,13 +249,13 @@ Ground truth: exact brute force over the Iceberg gold table. Iceberg rows are co
 
 | System | mean ms | p95 ms | recall@10 (by id) | recall@10 (tie-aware) |
 |---|---:|---:|---:|---:|
-| Qdrant HNSW (default) | 3.1 | 5.62 | 0.992 | 1.000 |
-| Qdrant exact | 2.59 | 3.32 | 0.992 | 1.000 |
-| Iceberg brute force (Spark) | 456.3 | 707.6 | 1.000 | 1.000 |
-| Iceberg IVF nprobe=1 (Spark) | 254.4 | 336.9 | 0.702 | 0.708 |
-| Iceberg IVF nprobe=3 (Spark) | 285.8 | 354.9 | 0.876 | 0.876 |
-| Iceberg IVF nprobe=5 (Spark) | 337.6 | 480.7 | 0.952 | 0.952 |
-| Iceberg IVF nprobe=10 (Spark) | 426.4 | 638.4 | 0.990 | 0.992 |
+| Qdrant HNSW (default) | 3.53 | 5.86 | 0.988 | 1.000 |
+| Qdrant exact | 2.51 | 2.88 | 0.988 | 1.000 |
+| Iceberg brute force (Spark) | 487.4 | 750.1 | 1.000 | 1.000 |
+| Iceberg IVF nprobe=1 (Spark) | 272.9 | 342.4 | 0.638 | 0.644 |
+| Iceberg IVF nprobe=3 (Spark) | 311.6 | 414.9 | 0.860 | 0.864 |
+| Iceberg IVF nprobe=5 (Spark) | 354.6 | 501.3 | 0.904 | 0.908 |
+| Iceberg IVF nprobe=10 (Spark) | 460.4 | 669.2 | 0.954 | 0.958 |
 
 Notes
 - Qdrant latency is a client-side HTTP round trip to a purpose-built engine; the Iceberg numbers include a full
@@ -266,7 +270,7 @@ Notes
 
 Benchmarks were measured on the [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 (licensed CC BY-NC-SA 4.0, non-commercial). The data is **not** included in this repository (`data/` is gitignored); download it yourself
-from Kaggle. The review text is Portuguese; the multilingual embedding model lets you query in English.
+from Kaggle. The review text is Portuguese; the demo uses a machine-translated English copy that `make translate` builds locally (also not committed).
 
 ## License
 
@@ -278,9 +282,9 @@ CC BY-NC-SA 4.0 licence (see above).
 ```
 docker-compose.yml  .env.example  Makefile  requirements.txt  versions.md
 scripts/   download_data.sh  generate_synthetic_data.py  wait_for_services.sh  render_results.py
-src/       common.py  data_source.py  embeddings.py  search.py  ui_server.py  ui/index.html  01_…10_*.py  bonus_qdrant_compare.py
+src/       common.py  data_source.py  translation.py  embeddings.py  search.py  ui_server.py  ui/index.html  01_…10_*.py  01b_translate_dataset.py  bonus_qdrant_compare.py
 notebooks/ 00_…11_*.ipynb (VS Code demo, one per step)  _setup.py
 tests/     test_smoke.py
 benchmarks/  measured results (json + markdown)
-docs/      architecture.md
+docs/      architecture.md  translation.md
 ```

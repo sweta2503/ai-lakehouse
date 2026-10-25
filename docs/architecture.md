@@ -5,7 +5,7 @@ flowchart LR
     subgraph Host["Your laptop"]
         CSV["Olist CSVs<br/>or synthetic data"]
         SP["PySpark 3.5 (local[N])<br/>Iceberg runtime + AWS bundle jars"]
-        ST["sentence-transformers<br/>MiniLM multilingual (CPU)"]
+        ST["sentence-transformers<br/>MiniLM (CPU)"]
         Q["Hybrid query CLI<br/>08_hybrid_query.py"]
     end
     subgraph Docker["Docker Compose"]

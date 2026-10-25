@@ -15,11 +15,21 @@ ORDERS = "olist_orders_dataset.csv"
 REVIEWS = "olist_order_reviews_dataset.csv"
 
 
-def locate_csvs() -> tuple[Path, Path, str]:
-    """Returns (orders_csv, reviews_csv, source) where source is 'olist' or 'synthetic'."""
+def locate_csvs(prefer_english: bool = True) -> tuple[Path, Path, str]:
+    """Returns (orders_csv, reviews_csv, source) where source is 'olist' or 'synthetic'.
+
+    For Olist, the English-translated reviews (data/english/, built by `make translate`) replace the Portuguese
+    file when they exist.
+    """
     for sub, name in (("", "olist"), ("olist", "olist"), ("synthetic", "synthetic")):
         d = DATA_DIR / sub if sub else DATA_DIR
         if (d / ORDERS).exists() and (d / REVIEWS).exists():
+            english = DATA_DIR / "english" / REVIEWS
+            if name == "olist" and prefer_english:
+                if english.exists():
+                    return d / ORDERS, english, name
+                log.warning("Olist reviews are in Portuguese. Run `make translate` for the English version "
+                            "(search, embeddings and the UI are meant to be run on English text).")
             return d / ORDERS, d / REVIEWS, name
     log.warning("Olist CSVs not found in %s -> generating a synthetic dataset (see scripts/download_data.sh "
                 "to use the real one)", DATA_DIR)
